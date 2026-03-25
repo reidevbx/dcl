@@ -1,0 +1,11 @@
+{
+  "name": "dcl",
+  "version": "0.2.0",
+  "description": "Directional Constraint Locking — a spatial-movement-driven multidimensional filtering algorithm",
+  "keywords": ["algorithm", "filtering", "spatial-navigation", "constraint-locking"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reidevbx/dcl"
+  }
+}

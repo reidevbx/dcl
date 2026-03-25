@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCL — Directional Constraint Locking</title>
+  <meta name="description" content="A spatial-movement-driven multidimensional filtering algorithm. Navigate in 8 directions to accumulate constraints and explore data.">
+  <meta property="og:title" content="DCL — Directional Constraint Locking">
+  <meta property="og:description" content="A spatial-movement-driven multidimensional filtering algorithm.">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <section id="intro">
+    <div class="wordmark">DCL · Directional Constraint Locking</div>
+    <h1>Direction as Filter,<br><span>Movement as Lock</span></h1>
+    <p class="tagline">A spatial-movement-driven multidimensional filtering algorithm. Each card holds a unique value (1–8 permutation) in 8 directions. Move in any direction to lock that dimension's value.</p>
+    <div class="rules-grid">
+      <div class="rule">
+        <div class="rule-num">RULE 01</div>
+        <div class="rule-text">The first move in any direction <strong>locks</strong> that dimension's value. Every subsequent step must satisfy all locked constraints.</div>
+      </div>
+      <div class="rule">
+        <div class="rule-num">RULE 02</div>
+        <div class="rule-text">Matching cards form a <strong>loop pool</strong>. Keep moving in the same direction to cycle through the pool.</div>
+      </div>
+      <div class="rule">
+        <div class="rule-num">RULE 03</div>
+        <div class="rule-text">Accumulate up to <strong>8 directional</strong> constraints. More locks = smaller intersection = closer to a specific target.</div>
+      </div>
+      <div class="rule">
+        <div class="rule-num">RULE 04</div>
+        <div class="rule-text">When no cards match, <strong>FIFO unlock</strong> releases the oldest constraint first. You never get stuck.</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+  </section>
+
+  <section id="demo">
+    <div id="status">
+      <div class="status-locks" id="locks-bar">
+        <span class="status-hint">Click any direction to start</span>
+      </div>
+      <div class="status-pool">
+        <div class="pool-num" id="pool-count">40</div>
+        <div class="pool-label">POOL SIZE</div>
+      </div>
+    </div>
+
+    <div id="fifo-toast"></div>
+    <div id="navigator"></div>
+
+    <div id="pool-display">
+      <div class="pool-title">Loop Pool</div>
+      <div class="pool-cards" id="pool-cards">
+        <span class="pool-empty">No constraints locked yet</span>
+      </div>
+    </div>
+
+    <div id="history-row">
+      <span class="hist-label">Trail</span>
+      <span id="history-inner" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></span>
+    </div>
+
+    <div id="controls">
+      <button class="ctrl-btn" onclick="resetDCL()">Reset</button>
+      <button class="ctrl-btn" onclick="clearHistory()">Clear trail</button>
+    </div>
+  </section>
+
+  <footer id="footer">
+    <span class="footer-text">DCL Algorithm</span>
+    <a class="footer-link" href="https://github.com/reidevbx/dcl" target="_blank" rel="noopener">GitHub</a>
+    <span class="footer-text" style="color:var(--border2)">40 cards · 8 directions · 1–8 permutation</span>
+  </footer>
+
+  <script src="dcl.js"></script>
+  <script src="demo.js"></script>
+</body>
+</html>
