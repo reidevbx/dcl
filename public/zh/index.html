@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCL — 方向約束鎖定演算法</title>
+  <meta name="description" content="以空間移動行為驅動的多維篩選演算法。在 8 個方向移動來累積約束條件，探索資料。">
+  <meta property="og:title" content="DCL — 方向約束鎖定演算法">
+  <meta property="og:description" content="以空間移動行為驅動的多維篩選演算法。">
+  <meta property="og:type" content="website">
+  <link rel="alternate" hreflang="en" href="../">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body
+  data-i18n-hint="點任意方向開始"
+  data-i18n-fifo="FIFO 解鎖："
+  data-i18n-pool-empty="尚未鎖定任何條件"
+  data-i18n-trail-empty="尚無軌跡"
+>
+
+  <section id="intro">
+    <div class="wordmark">
+      <span>DCL · 方向約束鎖定</span>
+      <a class="lang-switch" href="../">EN</a>
+    </div>
+    <h1>方向即篩選<br><span>移動即鎖定</span></h1>
+    <p class="tagline">一種以空間移動行為驅動的多維篩選演算法。每張卡片在 8 個方向各持有唯一數值（1–8 排列）。你往哪個方向移動，就鎖定那個維度的值。</p>
+    <div class="rules-grid">
+      <div class="rule">
+        <div class="rule-num">規則 01</div>
+        <div class="rule-text">第一次往某方向移動時，該方向的數值被<strong>鎖定</strong>。之後每步都必須符合所有已鎖定條件。</div>
+      </div>
+      <div class="rule">
+        <div class="rule-num">規則 02</div>
+        <div class="rule-text">符合條件的卡片形成一個<strong>循環池</strong>，在同一方向持續移動就在池中循環。</div>
+      </div>
+      <div class="rule">
+        <div class="rule-num">規則 03</div>
+        <div class="rule-text">累積最多 <strong>8 個方向</strong>的條件。鎖定越多，交集越小，越接近特定目標。</div>
+      </div>
+      <div class="rule">
+        <div class="rule-num">規則 04</div>
+        <div class="rule-text">當條件無交集時，<strong>FIFO 解鎖</strong>——最早鎖定的條件優先釋放，永遠不會卡死。</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+  </section>
+
+  <section id="demo">
+    <div id="status">
+      <div class="status-locks" id="locks-bar">
+        <span class="status-hint">點任意方向開始</span>
+      </div>
+      <div class="status-pool">
+        <div class="pool-num" id="pool-count">40</div>
+        <div class="pool-label">候選池</div>
+      </div>
+    </div>
+
+    <div id="fifo-toast"></div>
+    <div id="navigator"></div>
+
+    <div id="pool-display">
+      <div class="pool-title">循環池（Loop Pool）</div>
+      <div class="pool-cards" id="pool-cards">
+        <span class="pool-empty">尚未鎖定任何條件</span>
+      </div>
+    </div>
+
+    <div id="history-row">
+      <span class="hist-label">軌跡</span>
+      <span id="history-inner" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></span>
+    </div>
+
+    <div id="controls">
+      <button class="ctrl-btn" onclick="resetDCL()">重置</button>
+      <button class="ctrl-btn" onclick="clearHistory()">清除軌跡</button>
+    </div>
+  </section>
+
+  <footer id="footer">
+    <span class="footer-text">DCL 演算法</span>
+    <a class="footer-link" href="https://github.com/reidevbx/dcl" target="_blank" rel="noopener">GitHub</a>
+    <span class="footer-text" style="color:var(--border2)">40 張卡片 · 8 個方向 · 1–8 排列</span>
+  </footer>
+
+  <script src="../dcl.js"></script>
+  <script src="../demo.js"></script>
+</body>
+</html>

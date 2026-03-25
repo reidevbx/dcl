@@ -8,14 +8,23 @@
   <meta property="og:title" content="DCL — Directional Constraint Locking">
   <meta property="og:description" content="A spatial-movement-driven multidimensional filtering algorithm.">
   <meta property="og:type" content="website">
+  <link rel="alternate" hreflang="zh-Hant" href="./zh/">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body
+  data-i18n-hint="Click any direction to start"
+  data-i18n-fifo="FIFO unlock:"
+  data-i18n-pool-empty="No constraints locked yet"
+  data-i18n-trail-empty="No trail yet"
+>
 
   <section id="intro">
-    <div class="wordmark">DCL · Directional Constraint Locking</div>
+    <div class="wordmark">
+      <span>DCL · Directional Constraint Locking</span>
+      <a class="lang-switch" href="./zh/">中文</a>
+    </div>
     <h1>Direction as Filter,<br><span>Movement as Lock</span></h1>
     <p class="tagline">A spatial-movement-driven multidimensional filtering algorithm. Each card holds a unique value (1–8 permutation) in 8 directions. Move in any direction to lock that dimension's value.</p>
     <div class="rules-grid">

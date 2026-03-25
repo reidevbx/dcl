@@ -1,5 +1,7 @@
 # DCL — Directional Constraint Locking
 
+> **[繁體中文版 README](README.zh.md)**
+
 A spatial-movement-driven multidimensional filtering algorithm.
 
 Instead of setting filter criteria upfront, users **navigate in 8 directions** on a 2D canvas. Each movement locks a dimension's value; locked constraints accumulate, forming a multi-dimensional intersection query defined entirely by movement trajectory.
@@ -38,14 +40,16 @@ Step 3: Move ↗ → Lock ↗=...
 
 ## Live Demo
 
-Try the interactive demo: **[dcl.vercel.app](https://dcl.vercel.app)** (or run locally — see below).
+Try the interactive demo: **[reidevbx.github.io/dcl](https://reidevbx.github.io/dcl)** (or run locally — see below).
+
+Available in [English](https://reidevbx.github.io/dcl) and [繁體中文](https://reidevbx.github.io/dcl/zh/).
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Algorithm Specification](docs/specification.md) | Formal definition, properties, and proofs |
-| [Concept Document (中文)](docs/concept-zh.md) | Original concept writeup in Chinese |
+| Document | EN | 中文 |
+|----------|----|----|
+| Algorithm Specification | [specification.md](docs/en/specification.md) | [specification.md](docs/zh/specification.md) |
+| Concept Document | [concept.md](docs/en/concept.md) | [concept.md](docs/zh/concept.md) |
 
 ## Run Locally
 
@@ -66,25 +70,33 @@ Open `http://localhost:8000` (or `3000` for `serve`).
 
 ## Deploy
 
-Configured for [Vercel](https://vercel.com). Push to `main` to deploy, or:
+Deployed via [GitHub Pages](https://pages.github.com). Push to `main` triggers automatic deployment through GitHub Actions.
 
-```bash
-npx vercel
-```
+To enable: go to repo **Settings > Pages > Source**, select **GitHub Actions**.
 
 ## Project Structure
 
 ```
 dcl/
 ├── public/
-│   └── index.html        # Interactive demo (self-contained)
+│   ├── index.html        # Interactive demo (EN)
+│   ├── zh/index.html     # Interactive demo (繁中)
+│   ├── style.css         # Shared styles
+│   ├── dcl.js            # Core algorithm (zero DOM dependencies)
+│   └── demo.js           # UI rendering layer
 ├── docs/
-│   ├── specification.md  # Formal algorithm specification
-│   └── concept-zh.md     # Chinese concept document
-├── vercel.json           # Vercel deployment config
+│   ├── en/
+│   │   ├── specification.md
+│   │   └── concept.md
+│   └── zh/
+│       ├── specification.md
+│       └── concept.md
+├── .github/workflows/
+│   └── deploy.yml        # GitHub Pages deployment
 ├── package.json
 ├── LICENSE
-└── README.md
+├── README.md             # English (this file)
+└── README.zh.md          # 繁體中文
 ```
 
 ## Potential Applications

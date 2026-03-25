@@ -2,7 +2,7 @@
  * DCL Demo — UI layer
  *
  * Renders the interactive demo using the DCL engine (dcl.js).
- * Handles DOM updates, FIFO toast notifications, and user controls.
+ * Reads UI strings from data-i18n-* attributes on <body> for localization.
  */
 (function () {
   'use strict';
@@ -16,6 +16,15 @@
 
   var ARROWS = DCL.ARROWS;
 
+  // --- i18n: read strings from <body data-i18n-*> ---
+  var body = document.body;
+  var i18n = {
+    hint:        body.getAttribute('data-i18n-hint') || 'Click any direction to start',
+    fifo:        body.getAttribute('data-i18n-fifo') || 'FIFO unlock:',
+    poolEmpty:   body.getAttribute('data-i18n-pool-empty') || 'No constraints locked yet',
+    trailEmpty:  body.getAttribute('data-i18n-trail-empty') || 'No trail yet'
+  };
+
   // --- Initialize engine ---
   var engine = DCL.create({ cardCount: 40, seed: 2025 });
 
@@ -24,7 +33,7 @@
 
   function showToast(msg) {
     var el = document.getElementById('fifo-toast');
-    el.textContent = 'FIFO unlock: ' + msg;
+    el.textContent = i18n.fifo + ' ' + msg;
     el.classList.add('show');
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2800);
@@ -44,7 +53,6 @@
     var result = engine.navigate(dir);
     if (!result) return;
 
-    // FIFO feedback
     if (result.released.length) {
       var msg = result.released.map(function (r) {
         return ARROWS[r.dir] + '=' + r.val;
@@ -76,7 +84,7 @@
     var bar = document.getElementById('locks-bar');
     bar.innerHTML = '';
     if (!lockOrder.length) {
-      bar.innerHTML = '<span class="status-hint">Click any direction to start</span>';
+      bar.innerHTML = '<span class="status-hint">' + i18n.hint + '</span>';
       return;
     }
     lockOrder.forEach(function (d) {
@@ -145,7 +153,7 @@
   function renderPoolDisplay(lockOrder, fullPool, cur) {
     var el = document.getElementById('pool-cards');
     if (!lockOrder.length) {
-      el.innerHTML = '<span class="pool-empty">No constraints locked yet</span>';
+      el.innerHTML = '<span class="pool-empty">' + i18n.poolEmpty + '</span>';
       return;
     }
     var html = fullPool.slice(0, 24).map(function (c) {
@@ -161,7 +169,7 @@
     var el = document.getElementById('history-inner');
     var trail = history.concat([cur.label]);
     if (trail.length <= 1) {
-      el.innerHTML = '<span class="hist-empty">No trail yet</span>';
+      el.innerHTML = '<span class="hist-empty">' + i18n.trailEmpty + '</span>';
       return;
     }
     el.innerHTML = trail.map(function (label, i) {
