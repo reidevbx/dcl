@@ -80,15 +80,19 @@ All cards satisfying every locked constraint, excluding the current card.
 The canvas has 8 movement directions, each corresponding to a fixed data dimension:
 
 ```
-        Up (U)
-         ↑
-  LU  ↖  │  ↗  RU
-         │
-  L  ←───●───→  R
-         │
-  LD  ↙  │  ↘  RD
-         ↓
-       Down (D)
+                 [U]
+                  |
+   [LU]  \        |        /  [RU]
+           \      |      /
+             \    |    /
+               \  |  /
+    [L] --------- o --------- [R]
+               /  |  \
+             /    |    \
+           /      |      \
+   [LD]  /        |        \  [RD]
+                  |
+                 [D]
 ```
 
 Each card holds a value from 1 to 8 in each direction, with all 8 values being distinct (a permutation).
