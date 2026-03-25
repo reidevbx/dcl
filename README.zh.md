@@ -107,6 +107,37 @@ dcl/
 - **靈感牆**：在視覺風格空間裡自由漂流
 - 任何需要多維探索但不想讓使用者面對複雜篩選介面的場景
 
+## 插件系統
+
+DCL 支援可選的插件架構。插件可以擴展引擎功能，而不改動核心演算法。
+
+```js
+var engine = DCL.create({ cardCount: 40 });
+
+// 可選：啟用記憶插件
+DCL.use(engine, 'memory');
+
+engine.navigate('right');
+engine.navigate('up');
+engine.undo();       // 回到前一張卡片（鎖定狀態維持不變）
+engine.canUndo();    // true / false
+```
+
+### 內建插件
+
+| 插件 | 新增方法 | 說明 |
+|------|---------|------|
+| `memory` | `undo()`, `canUndo()` | 記錄卡片歷史。回退時切回前一張卡片，鎖定狀態不變，候選池根據當前約束重新計算。 |
+
+### 自訂插件
+
+```js
+DCL.register('myPlugin', function (engine) {
+  // 包裝或擴展 engine 的方法
+});
+DCL.use(engine, 'myPlugin');
+```
+
 ## 演算法性質
 
 | 性質 | 保證 |

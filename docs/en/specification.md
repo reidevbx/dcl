@@ -1,7 +1,7 @@
 # DCL Algorithm Specification
 
 **Directional Constraint Locking**
-Version 0.3 — 2026-03-25
+Version 0.4 — 2026-03-26
 
 ---
 
@@ -237,10 +237,62 @@ The permutation constraint requires assigning values {1…8} to each card's 8 di
 
 ---
 
-## 8. Version History
+## 8. Plugin System
+
+### 8.1 Architecture
+
+The DCL engine supports an opt-in plugin mechanism. The core algorithm remains unchanged; plugins extend engine instances by wrapping or adding methods.
+
+```
+DCL.register(name, installer)   // register a plugin globally
+DCL.use(engine, name)           // mount a plugin on a specific engine instance
+```
+
+The `installer` function receives the engine instance and may:
+- Wrap existing methods (e.g., intercept `navigate` to add pre/post logic)
+- Add new methods to the engine (e.g., `undo`)
+- Maintain private state via closure
+
+### 8.2 Built-in Plugin: `memory`
+
+**Purpose**: Navigation undo — revert to the previous card without altering lock state.
+
+**State**: An internal card stack (max depth: 50).
+
+**Modified methods**:
+
+| Method | Behavior |
+|--------|----------|
+| `navigate(d)` | Before calling the original, pushes `c_t` onto the card stack |
+| `reset()` | Clears the card stack, then calls the original |
+
+**Added methods**:
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `undo()` | `{card, pool, fullPool, lockMap, lockOrder}` or `null` | Pops the stack, sets `c_t` to the previous card. Lock state L and lock order Q are **not modified**. Pool is recalculated as P(L, c_t_prev). Returns `null` if stack is empty. |
+| `canUndo()` | `boolean` | Whether the card stack is non-empty |
+
+**Formal semantics of undo**:
+
+```
+undo():
+  if stack = ∅: return null
+  c_prev ← stack.pop()
+  c_t ← c_prev
+  P ← P(L, c_t)         // L is unchanged
+  return (c_t, P, L, Q)
+```
+
+Key property: **undo preserves constraints**. The lock set L and lock order Q are invariant across undo operations. Only the current card c_t changes.
+
+---
+
+## 9. Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-03-25 | Initial draft: concept and basic rules |
 | 0.2 | 2026-03-25 | Formal definitions, FIFO unlock confirmed, permutation constraint, prototype completed |
 | 0.3 | 2026-03-25 | Fixed probability model (falling factorial), defined deterministic pool ordering, added fuzzy matching trade-off analysis |
+| 0.4 | 2026-03-26 | Added plugin system architecture and built-in memory (undo) plugin specification |

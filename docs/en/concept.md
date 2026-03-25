@@ -1,8 +1,8 @@
 # Directional Constraint Locking
 ## Concept Document
 
-**Version:** v0.3
-**Date:** 2026-03-25
+**Version:** v0.4
+**Date:** 2026-03-26
 **Status:** Proof of concept (Prototype complete)
 
 ---
@@ -250,6 +250,30 @@ Proposed extension: each repeated move in an already-locked direction increments
 
 Progressive refinement and ordered dimensions can be combined. Ordered dimensions control "direction" (stronger/newer), while progressive refinement controls "precision" (more exact). Together they create a coarse-to-fine exploration experience.
 
+### 7.3 Plugin Architecture
+
+The DCL engine supports an opt-in **plugin system**, allowing extensions to be mounted on demand without modifying the core algorithm.
+
+**Design philosophy:**
+
+- The core engine (`DCL.create()`) remains minimal and pure — no optional features baked in
+- Extensions are registered globally and mounted per-engine via `DCL.use(engine, 'pluginName')`
+- Plugins can wrap existing methods (e.g., `navigate`) or add new methods (e.g., `undo`)
+
+**Built-in plugin — `memory`:**
+
+The first built-in plugin provides navigation undo. Key behavior:
+
+- On each `navigate()`, the current card is pushed onto an internal stack
+- `undo()` pops the stack and reverts to the previous card
+- **Lock state is preserved** — undo does not roll back constraints
+- The candidate pool is recalculated based on the current (unchanged) lock state
+- `reset()` clears the memory stack
+
+This design reflects a deliberate choice: undo means "go back to the previous card within the current constraints", not "undo the entire navigation step". The user's accumulated constraint trajectory is always preserved.
+
+**Future plugins** could include: anti-repeat (avoid revisiting recent cards), analytics (track navigation patterns), path recording (persist full navigation history), etc.
+
 ---
 
 ## 8. Open Design Questions
@@ -282,3 +306,4 @@ Progressive refinement and ordered dimensions can be combined. Ordered dimension
 | v0.1 | 2026-03-25 | Initial draft: concept and basic rules |
 | v0.2 | 2026-03-25 | Added formal definitions, confirmed FIFO unlock, permutation constraint, prototype complete |
 | v0.3 | 2026-03-25 | Added extension directions: ordered dimensions (time/intensity axis), same-direction progressive refinement |
+| v0.4 | 2026-03-26 | Added plugin architecture and built-in memory (undo) plugin |

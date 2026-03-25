@@ -107,6 +107,37 @@ dcl/
 - **Inspiration boards**: free-form drifting through visual style space
 - Any scenario requiring multidimensional exploration without complex filter UIs
 
+## Plugin System
+
+DCL supports an opt-in plugin architecture. Plugins extend the engine without altering the core algorithm.
+
+```js
+var engine = DCL.create({ cardCount: 40 });
+
+// Opt-in: enable the memory plugin
+DCL.use(engine, 'memory');
+
+engine.navigate('right');
+engine.navigate('up');
+engine.undo();       // go back to the previous card (locks preserved)
+engine.canUndo();    // true / false
+```
+
+### Built-in Plugins
+
+| Plugin | Methods Added | Description |
+|--------|--------------|-------------|
+| `memory` | `undo()`, `canUndo()` | Tracks card history. Undo reverts to the previous card while preserving all lock state. The candidate pool is recalculated based on current constraints. |
+
+### Custom Plugins
+
+```js
+DCL.register('myPlugin', function (engine) {
+  // wrap or extend engine methods
+});
+DCL.use(engine, 'myPlugin');
+```
+
 ## Algorithm Properties
 
 | Property | Guarantee |
