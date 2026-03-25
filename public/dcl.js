@@ -182,20 +182,83 @@ var DCL = (function () {
       };
     }
 
+    function _setCur(card) {
+      state.cur = card;
+    }
+
     return {
       cards: cards,
       navigate: navigate,
       reset: reset,
       clearHistory: clearHistory,
-      getState: getState
+      getState: getState,
+      _setCur: _setCur
     };
   }
+
+  // --- Plugin system ---
+
+  var plugins = {};
+
+  function register(name, installer) {
+    plugins[name] = installer;
+  }
+
+  function use(engine, name) {
+    if (!plugins[name]) throw new Error('DCL: unknown plugin "' + name + '"');
+    plugins[name](engine);
+    return engine;
+  }
+
+  // --- Built-in plugin: memory (undo) ---
+  // Only tracks card history. Locks are preserved, pool recalculated.
+
+  register('memory', function (engine) {
+    var cardStack = [];
+    var maxSize = 50;
+
+    var _navigate = engine.navigate;
+    var _reset = engine.reset;
+
+    engine.navigate = function (dir) {
+      var before = engine.getState().cur;
+      var result = _navigate(dir);
+      if (result) {
+        cardStack.push(before);
+        if (cardStack.length > maxSize) cardStack.shift();
+      }
+      return result;
+    };
+
+    engine.reset = function () {
+      cardStack = [];
+      _reset();
+    };
+
+    engine.undo = function () {
+      if (!cardStack.length) return null;
+      var prev = cardStack.pop();
+      engine._setCur(prev);
+      var s = engine.getState();
+      return {
+        card: prev,
+        pool: getPool(engine.cards, s.lockMap, prev.id),
+        fullPool: getAllMatch(engine.cards, s.lockMap),
+        lockMap: s.lockMap,
+        lockOrder: s.lockOrder
+      };
+    };
+
+    engine.canUndo = function () { return cardStack.length > 0; };
+  });
 
   // Public API
   return {
     DIRS: DIRS,
     ARROWS: ARROWS,
     create: create,
+    register: register,
+    use: use,
     generateCards: generateCards,
     getPool: getPool,
     getAllMatch: getAllMatch,

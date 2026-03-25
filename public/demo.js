@@ -62,6 +62,7 @@
     }
 
     render();
+    updateUndoBtn();
   }
 
   // --- Render ---
@@ -178,10 +179,38 @@
     }).join('');
   }
 
+  // --- Memory plugin ---
+  var memoryEnabled = false;
+
+  function updateUndoBtn() {
+    var btn = document.getElementById('undo-btn');
+    if (!btn) return;
+    btn.disabled = !memoryEnabled || !engine.canUndo || !engine.canUndo();
+  }
+
+  window.toggleMemory = function (on) {
+    if (on && !memoryEnabled) {
+      DCL.use(engine, 'memory');
+      memoryEnabled = true;
+    }
+    var btn = document.getElementById('undo-btn');
+    if (btn) btn.style.display = on ? '' : 'none';
+    updateUndoBtn();
+  };
+
+  window.undoDCL = function () {
+    if (!memoryEnabled || !engine.undo) return;
+    var result = engine.undo();
+    if (!result) return;
+    render();
+    updateUndoBtn();
+  };
+
   // --- Public controls ---
   window.resetDCL = function () {
     engine.reset();
     render();
+    updateUndoBtn();
   };
 
   window.clearHistory = function () {
