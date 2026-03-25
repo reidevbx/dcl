@@ -1,7 +1,7 @@
 # DCL Algorithm Specification
 
 **Directional Constraint Locking**
-Version 0.2 — 2026-03-25
+Version 0.3 — 2026-03-25
 
 ---
 
@@ -60,12 +60,14 @@ Given a direction d, navigation proceeds as follows:
        L  ← L \ {(d', ·)}      // remove that constraint
        P  ← P(L, c_t)          // recompute
 
-4. CYCLE — Select the next card from the pool:
+4. CYCLE — Select the next card from the pool (P ordered by card id):
      c_t ← P[k mod |P|]
      k   ← k + 1
 ```
 
 **Note on already-locked directions**: When d ∈ L (the direction is already locked), step 1 is skipped — no new constraint is added. The function proceeds directly to step 2 with the existing lock set, effectively cycling through the same pool.
+
+**Determinism**: The candidate pool P must be sorted by a deterministic key (e.g., card id) before indexing with `k mod |P|`. Without a defined ordering, different implementations may produce different traversal sequences for the same input, making the algorithm non-reproducible.
 
 ---
 
@@ -192,13 +194,26 @@ The `attrs` object maps each of the 8 directions to a unique integer in {1…8}.
 
 ### 7.1 Pool Size vs. Constraint Count
 
-With n cards and k locked constraints, the expected pool size decreases exponentially. Each direction-value pair matches approximately n/8 cards (assuming uniform distribution). With k independent locks:
+With n cards and k locked constraints, the expected pool size decreases as constraints accumulate.
+
+**Assumption**: Card attributes are drawn from uniformly random permutations of {1…8}. Real-world data may be skewed — the analysis below provides a baseline; actual pool sizes should be validated empirically.
+
+Because A(c, ·) is a permutation, the 8 directional values are **not independent** — knowing one value constrains the remaining possibilities. The correct model uses the falling factorial:
 
 ```
-E[|P|] ≈ n / 8^k
+E[|P|] ≈ n × k! / 8! × (8-k)!  =  n / P(8, k)
+
+where P(8, k) = 8 × 7 × 6 × ... × (8-k+1)  (falling factorial)
 ```
 
-For n=40, k=3: E[|P|] ≈ 40/512 ≈ 0.08. This means FIFO unlock is expected to trigger frequently with small card sets and many locks. Practical recommendation: **n should be at least 8^2 = 64 for a smooth experience with 2 simultaneous locks**.
+| k (locks) | P(8, k) | E[\|P\|] for n=40 | E[\|P\|] for n=100 |
+|-----------|---------|-------------------|---------------------|
+| 1 | 8 | 5.0 | 12.5 |
+| 2 | 56 | 0.71 | 1.79 |
+| 3 | 336 | 0.12 | 0.30 |
+| 4 | 1680 | 0.02 | 0.06 |
+
+This shows that FIFO unlock triggers frequently with small card sets — even 2 locks on 40 cards yields an expected pool below 1. Practical recommendation: **n should be at least 56 (= P(8,2)) for a smooth experience with 2 simultaneous locks, and at least 336 for 3 locks**.
 
 ### 7.2 Fuzzy Matching Extension
 
@@ -208,7 +223,9 @@ The strict equality constraint `A(c, d) = v` can be relaxed to a tolerance windo
 P_fuzzy(L, c_t, ε) = { c ∈ C | c ≠ c_t ∧ ∀(d, v) ∈ L : |A(c, d) - v| ≤ ε }
 ```
 
-With ε=1, each lock matches approximately 3/8 of cards instead of 1/8, significantly increasing pool sizes for small datasets. The permutation constraint still holds — fuzzy matching only affects the filtering, not the card data.
+With ε=1, each lock matches approximately 3/8 of cards instead of 1/8, significantly increasing pool sizes for small datasets. The permutation constraint still holds for the underlying data — fuzzy matching only relaxes the query, not the card attributes.
+
+**Trade-off**: Fuzzy matching increases pool size at the cost of reduced discriminative power. With ε=1, constraints become less precise — the user may see cards that are "close but not exact", which may or may not match the intended exploration direction. The tolerance ε should be tuned per application.
 
 ### 7.3 Value Assignment Strategies
 
@@ -226,3 +243,4 @@ The permutation constraint requires assigning values {1…8} to each card's 8 di
 |---------|------|---------|
 | 0.1 | 2026-03-25 | Initial draft: concept and basic rules |
 | 0.2 | 2026-03-25 | Formal definitions, FIFO unlock confirmed, permutation constraint, prototype completed |
+| 0.3 | 2026-03-25 | Fixed probability model (falling factorial), defined deterministic pool ordering, added fuzzy matching trade-off analysis |
