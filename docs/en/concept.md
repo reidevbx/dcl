@@ -25,14 +25,16 @@ Core philosophy: **"Where you go is what you filter."**
 |--------|-----------|
 | `C` | Set of all cards, \|C\| = n |
 | `D` | {↖ ↑ ↗ ← → ↙ ↓ ↘}, 8 directions |
-| `A(c, d)` | Card c's attribute value in direction d, A : C × D → {1…8} |
-| `L` | Current lock set, L ⊆ D × {1…8} |
+| `N` | Category count (configurable, N ≥ 8, default 8) |
+| `A(c, d)` | Card c's attribute value in direction d, A : C × D → {1…N} |
+| `L` | Current lock set, L ⊆ D × {1…N} |
 | `Q` | Lock-order queue (FIFO), recording the sequence of locked directions |
 | `cₜ` | Current card |
 
-**Permutation Constraint (Core Rule):**
-For each card c, `A(c, ·)` is a **bijection (permutation)** from D → {1…8}.
+**Selection Constraint (Core Rule):**
+For each card c, `A(c, ·)` selects **8 distinct values from {1…N}** (a partial permutation P(N,8)).
 Each card's 8 directional values are all different — no repeats.
+When N = 8, this is a full bijection (permutation); when N > 8, values are drawn from a larger pool.
 
 ### 2.2 Candidate Pool Function
 
@@ -69,7 +71,7 @@ All cards satisfying every locked constraint, excluding the current card.
 - **Maximum lock count**: |L| ≤ 8 (limited by the number of directions)
 - **Deadlock freedom**: As long as |C| > 1, P(∅, cₜ) ≠ ∅ always holds; FIFO unlock guarantees candidates
 - **Cyclic navigation**: Under fixed L, continuous navigation loops back to the start (finite cyclic group)
-- **Permutation constraint**: A(c, ·) is a bijection ⟹ a card cannot have the same value in two directions
+- **Selection constraint**: A(c, ·) selects 8 distinct values from {1…N} ⟹ a card cannot have the same value in two directions
 
 ---
 
@@ -95,7 +97,7 @@ The canvas has 8 movement directions, each corresponding to a fixed data dimensi
                  [D]
 ```
 
-Each card holds a value from 1 to 8 in each direction, with all 8 values being distinct (a permutation).
+Each card holds 8 distinct values drawn from {1…N} (where N is configurable, default 8), one per direction — no repeats across directions.
 
 ### 3.2 Locking Mechanism
 
@@ -141,7 +143,7 @@ When the intersection of multiple constraints is empty, the **oldest locked cons
 
 ### 4.1 Card Node
 
-Each card is a node containing 8 directional values (a permutation, no repeats):
+Each card is a node containing 8 distinct directional values drawn from {1…N} (no repeats):
 
 ```json
 {
@@ -220,8 +222,8 @@ This means certain directions can be marked as "ordered dimensions". Instead of 
 
 **Design considerations:**
 
-- Ordered dimensions no longer satisfy the permutation constraint (multiple cards can match the same value range)
-- Pool size decays more slowly (`>=3` hits 6/8 of cards, while `=3` hits only 1/8)
+- Ordered dimensions no longer satisfy the selection constraint (multiple cards can match the same value range)
+- Pool size decays more slowly (`>=3` hits many cards, while `=3` hits only a fraction)
 - Recommend at most 2 ordered dimensions; keep the rest as exact match to maintain filtering power
 
 ### 7.2 Same-Direction Progressive Refinement (Sub-step Refinement)
@@ -241,8 +243,8 @@ Proposed extension: each repeated move in an already-locked direction increments
 
 **Implementation impact:**
 
-- Value domain expands from discrete integers {1…8} to continuous values or a finer discrete scale (e.g., {1.0, 1.1, ..., 8.9})
-- Permutation constraint must be relaxed: no longer a strict bijection; each card holds a float per direction
+- Value domain expands from discrete integers {1…N} to continuous values or a finer discrete scale (e.g., {1.0, 1.1, ..., N.9})
+- Selection constraint must be relaxed: no longer strictly distinct integers; each card holds a float per direction
 - Matching logic changes to interval comparison: `|A(c, d) - v| <= tolerance`, with tolerance decreasing as sub-steps increase
 - Sub-step increment and tolerance decay curve need careful tuning to balance "convergence speed" vs. "pool size"
 
@@ -280,7 +282,7 @@ This design reflects a deliberate choice: undo means "go back to the previous ca
 
 - [x] Release order when constraints are exhausted → Confirmed: **FIFO (first in, first out)**
 - [ ] Who defines the dimension semantics for each direction? Fixed by product? Or dynamically generated per dataset?
-- [ ] Values are discrete integers 1–8 — can fuzzy matching (e.g., ±1) be supported?
+- [ ] Values are discrete integers drawn from {1…N} — can fuzzy matching (e.g., ±1) be supported?
 - [ ] For large card pools, how can AI auto-score each direction (CLIP embeddings)?
 - [ ] How do ordered dimensions interact with FIFO unlock? Should directional unlock roll back to the previous bound rather than fully removing the constraint?
 - [ ] How to design sub-step increment (0.1? dynamic?) and tolerance decay curve for progressive refinement?
@@ -289,7 +291,7 @@ This design reflects a deliberate choice: undo means "go back to the previous ca
 
 ## 9. Next Steps
 
-1. **~~Prototype implementation~~** ✓ Complete (40 cards, FIFO unlock, cyclic navigation)
+1. **~~Prototype implementation~~** ✓ Complete (100 cards, FIFO unlock, cyclic navigation)
 2. **Validate core experience**: Does the movement feel intuitive?
 3. **Real content replacement**: Replace placeholder cards with fashion photos + manual scoring
 4. **AI scoring integration**: Connect CLIP embeddings to auto-generate directional values

@@ -21,18 +21,20 @@ The algorithm guarantees deadlock-free navigation through a FIFO unlock mechanis
 |--------|-----------|
 | C | Set of all cards, \|C\| = n |
 | D | {↖, ↑, ↗, ←, →, ↙, ↓, ↘}, the 8 directions |
-| A(c, d) | Attribute function: card c's value in direction d. A : C × D → {1…8} |
-| L | Current lock set, L ⊆ D × {1…8} |
+| N | Value domain size, configurable (default N=8, must satisfy N ≥ 8) |
+| A(c, d) | Attribute function: card c's value in direction d. A : C × D → {1…N} |
+| L | Current lock set, L ⊆ D × {1…N} |
 | Q | Lock-order queue (FIFO), recording the sequence in which directions were locked |
 | c_t | Current card at time t |
 
 ### 2.2 Permutation Constraint
 
-For every card c ∈ C, the function A(c, ·) : D → {1…8} is a **bijection** (permutation).
+For every card c ∈ C, A(c, ·) selects **8 distinct values** from {1…N} (where N ≥ 8, default N=8).
 
-This means each card's 8 directional values are a rearrangement of {1, 2, 3, 4, 5, 6, 7, 8} with no repeats.
+- When **N=8**: A(c, ·) : D → {1…8} is a **bijection** (full permutation) — each card's 8 directional values are a rearrangement of {1, 2, 3, 4, 5, 6, 7, 8} with no repeats.
+- When **N>8**: A(c, ·) is an **injection** — each card picks 8 distinct values from the larger pool {1…N}, yielding P(N, 8) = N!/(N−8)! possible arrangements per card. Values do not cover the full range.
 
-**Implication**: A single card cannot have the same value in two different directions. This ensures maximum discrimination when locking constraints.
+**Implication**: In both cases, a single card cannot have the same value in two different directions. This ensures maximum discrimination when locking constraints.
 
 ### 2.3 Candidate Pool
 
@@ -99,7 +101,7 @@ The cycle length equals |P(L, c_t)|.
 
 ### 3.5 Permutation Uniqueness
 
-Because A(c, ·) is a bijection for each card, a card can match at most one value per direction. This prevents ambiguous constraint matching and ensures the lock set L is well-defined (each direction appears at most once in L).
+Because A(c, ·) selects 8 **distinct** values for each card (whether N=8 or N>8), a card can match at most one value per direction. This prevents ambiguous constraint matching and ensures the lock set L is well-defined (each direction appears at most once in L).
 
 ---
 
@@ -154,7 +156,7 @@ For large card sets, the O(n) pool computation can be improved:
 }
 ```
 
-The `attrs` object maps each of the 8 directions to a unique integer in {1…8}.
+The `attrs` object maps each of the 8 directions to a unique integer in {1…N} (N configurable, default 8). All 8 values within a single card must be distinct.
 
 ### 5.2 Navigation State
 
@@ -194,15 +196,27 @@ The `attrs` object maps each of the 8 directions to a unique integer in {1…8}.
 
 With n cards and k locked constraints, the expected pool size decreases as constraints accumulate.
 
-**Assumption**: Card attributes are drawn from uniformly random permutations of {1…8}. Real-world data may be skewed — the analysis below provides a baseline; actual pool sizes should be validated empirically.
+**Assumption**: Card attributes are drawn from uniformly random selections of 8 distinct values from {1…N}. Real-world data may be skewed — the analysis below provides a baseline; actual pool sizes should be validated empirically.
 
-Because A(c, ·) is a permutation, the 8 directional values are **not independent** — knowing one value constrains the remaining possibilities. The correct model uses the falling factorial:
+The probability model depends on whether N=8 or N>8:
+
+**When N=8 (default)**: A(c, ·) is a full permutation, so the 8 directional values are **not independent** — knowing one value constrains the remaining possibilities. The correct model uses the falling factorial:
 
 ```
-E[|P|] ≈ n × k! / 8! × (8-k)!  =  n / P(8, k)
+E[|P|] ≈ n / P(8, k)
 
-where P(8, k) = 8 × 7 × 6 × ... × (8-k+1)  (falling factorial)
+where P(8, k) = 8 × 7 × ... × (8-k+1)  (falling factorial, permutation constraint)
 ```
+
+**When N>8**: Each card independently picks 8 distinct values from {1…N}. Values across different directions are effectively independent (the per-direction probability of matching any specific value v is 8/N). The expected pool size per lock becomes:
+
+```
+E[|P|] ≈ n × (8/N)^k
+
+where 8/N is the per-direction hit probability
+```
+
+**N=8 model** (permutation constraint applies):
 
 | k (locks) | P(8, k) | E[\|P\|] for n=40 | E[\|P\|] for n=100 |
 |-----------|---------|-------------------|---------------------|
@@ -211,7 +225,9 @@ where P(8, k) = 8 × 7 × 6 × ... × (8-k+1)  (falling factorial)
 | 3 | 336 | 0.12 | 0.30 |
 | 4 | 1680 | 0.02 | 0.06 |
 
-This shows that FIFO unlock triggers frequently with small card sets — even 2 locks on 40 cards yields an expected pool below 1. Practical recommendation: **n should be at least 56 (= P(8,2)) for a smooth experience with 2 simultaneous locks, and at least 336 for 3 locks**.
+This shows that FIFO unlock triggers frequently with small card sets — even 2 locks on 40 cards yields an expected pool below 1. Practical recommendation for N=8: **n should be at least 56 (= P(8,2)) for a smooth experience with 2 simultaneous locks, and at least 336 for 3 locks**.
+
+For N>8, increasing N spreads values across a larger domain, reducing per-direction hit probability (8/N) and shrinking pool sizes faster. Choose N to balance discrimination strength against pool depletion risk for the target card count.
 
 ### 7.2 Fuzzy Matching Extension
 
@@ -221,16 +237,17 @@ The strict equality constraint `A(c, d) = v` can be relaxed to a tolerance windo
 P_fuzzy(L, c_t, ε) = { c ∈ C | c ≠ c_t ∧ ∀(d, v) ∈ L : |A(c, d) - v| ≤ ε }
 ```
 
-With ε=1, each lock matches approximately 3/8 of cards instead of 1/8, significantly increasing pool sizes for small datasets. The permutation constraint still holds for the underlying data — fuzzy matching only relaxes the query, not the card attributes.
+With ε=1, each lock matches approximately 3/N of cards (for small N) instead of 1/N, significantly increasing pool sizes for small datasets. The distinctness constraint still holds for the underlying card attributes — fuzzy matching only relaxes the query, not the card values.
 
 **Trade-off**: Fuzzy matching increases pool size at the cost of reduced discriminative power. With ε=1, constraints become less precise — the user may see cards that are "close but not exact", which may or may not match the intended exploration direction. The tolerance ε should be tuned per application.
 
 ### 7.3 Value Assignment Strategies
 
-The permutation constraint requires assigning values {1…8} to each card's 8 directions. Strategies include:
+The distinctness constraint requires assigning 8 unique values from {1…N} to each card's 8 directions. Strategies include:
 
-- **Random permutation**: Simple, uniform distribution. Used in the prototype.
-- **Embedding-based**: Map card features (e.g., via CLIP) to 8 dimensions, then rank-order within each dimension to produce discrete values.
+- **Random selection (N=8)**: Shuffle {1…8} and assign — a full permutation. Simple, uniform distribution. Used in the prototype.
+- **Random selection (N>8)**: Draw 8 distinct values uniformly at random from {1…N} without replacement. Values are independent across directions.
+- **Embedding-based**: Map card features (e.g., via CLIP) to N dimensions, then select the 8 most discriminative dimension ranks as the card's values.
 - **Manual curation**: Domain experts assign values for small, high-quality datasets.
 
 ---

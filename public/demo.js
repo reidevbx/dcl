@@ -21,10 +21,9 @@
   };
 
   // --- Display helpers (presentation concern, not in core algorithm) ---
-  var CATEGORIES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-
   function categoryLabel(val) {
-    return CATEGORIES[(val - 1) % CATEGORIES.length];
+    var i = val - 1;
+    return i < 26 ? String.fromCharCode(65 + i) : 'A' + (i - 25);
   }
 
   function cardLabel(card) {
@@ -46,7 +45,7 @@
   var visited = {};  // card id → true, tracks all visited cards
 
   // --- Initialize engine ---
-  var engine = DCL.create({ cardCount: 100, seed: 2025 });
+  var engine = DCL.create({ cardCount: 100, categories: 20, seed: 2025 });
 
   // --- Toast ---
   var toastTimer = null;

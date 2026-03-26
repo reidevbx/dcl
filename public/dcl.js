@@ -8,7 +8,7 @@
  * Cards are frozen (immutable) after generation.
  *
  * Usage:
- *   var engine = DCL.create({ cardCount: 40, seed: 2025 });
+ *   var engine = DCL.create({ cardCount: 100, seed: 2025 });
  *   var result = engine.navigate('right');
  *   // result = { card, candidates, allMatches, released, lockMap, lockOrder }
  */
@@ -48,12 +48,17 @@ var DCL = (function () {
   }
 
   // --- Card generation ---
-  function generateCards(count, baseSeed) {
+  function generateCards(count, baseSeed, categories) {
+    var n = categories || 8;
+    // Build the full value pool [1..n], then shuffle and take first 8
+    var pool = [];
+    for (var v = 1; v <= n; v++) pool.push(v);
+
     var cards = [];
     for (var i = 0; i < count; i++) {
-      var vals = shuffle([1, 2, 3, 4, 5, 6, 7, 8], baseSeed + i * SEED_STEP);
+      var shuffled = shuffle(pool, baseSeed + i * SEED_STEP);
       var attrs = {};
-      for (var d = 0; d < DIRS.length; d++) attrs[DIRS[d]] = vals[d];
+      for (var d = 0; d < DIRS.length; d++) attrs[DIRS[d]] = shuffled[d];
       var card = { id: i, attrs: attrs };
       Object.freeze(attrs);
       Object.freeze(card);
@@ -100,7 +105,8 @@ var DCL = (function () {
     opts = opts || {};
     var cardCount = opts.cardCount || 40;
     var baseSeed = opts.seed || 2025;
-    var cards = opts.cards || generateCards(cardCount, baseSeed);
+    var categories = opts.categories || 8;
+    var cards = opts.cards || generateCards(cardCount, baseSeed, categories);
     var state = createState(cards[0]);
 
     function createState(startCard) {

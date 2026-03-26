@@ -18,7 +18,7 @@ Instead of setting filter criteria upfront, users **navigate in 8 directions** o
      ↙  ↓  ↘
 ```
 
-1. Each card holds 8 values (one per direction), forming a **permutation of 1–8** — no duplicates.
+1. Each card holds **8 distinct values drawn from {1…N}** (N configurable, default 8; one per direction) — no duplicates. When N = 8, this is a full permutation; when N > 8, it is a partial permutation P(N,8).
 2. Moving in a direction for the first time **locks** that dimension to the current card's value.
 3. All cards matching every locked constraint form a **loop pool**. Keep moving to cycle through it.
 4. Constraints only accumulate (up to 8). When no cards satisfy all constraints, the **oldest lock is released first** (FIFO unlock), guaranteeing you never hit a dead end.
@@ -112,7 +112,7 @@ dcl/
 DCL supports an opt-in plugin architecture. Plugins extend the engine without altering the core algorithm.
 
 ```js
-var engine = DCL.create({ cardCount: 40 });
+var engine = DCL.create({ cardCount: 100 });
 
 // Opt-in: enable the memory plugin
 DCL.use(engine, 'memory');
@@ -146,7 +146,7 @@ DCL.use(engine, 'myPlugin');
 | Max constraints | \|L\| ≤ 8 |
 | No dead ends | FIFO unlock ensures P ≠ ∅ as long as \|C\| > 1 |
 | Cyclic navigation | Finite pool → loops back to start |
-| Permutation constraint | A(c, ·) is a bijection → no duplicate values per card |
+| Selection constraint | A(c, ·) selects 8 distinct values from {1…N} → no duplicate values per card |
 
 ## Open Questions
 
