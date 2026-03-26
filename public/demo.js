@@ -242,6 +242,9 @@
     if (on && !memoryEnabled) {
       DCL.use(engine, 'memory');
       memoryEnabled = true;
+      engine.reset();
+      trail = [];
+      visited = {};
     }
     var undoBtn = document.getElementById('undo-btn');
     var redoBtn = document.getElementById('redo-btn');
