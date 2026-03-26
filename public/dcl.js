@@ -253,7 +253,7 @@ var DCL = (function () {
   });
 
   // Public API
-  return {
+  var api = {
     DIRS: DIRS,
     ARROWS: ARROWS,
     create: create,
@@ -264,4 +264,11 @@ var DCL = (function () {
     getAllMatch: getAllMatch,
     lockKey: lockKey
   };
+
+  return api;
 })();
+
+// UMD export — works in browser (global), CommonJS (require), and ESM (import)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = DCL;
+}
