@@ -163,8 +163,7 @@ The `attrs` object maps each of the 8 directions to a unique integer in {1…8}.
   "current": "card_001",
   "lockMap": { "right": 8, "up": 7 },
   "lockOrder": ["right", "up"],
-  "counter": { "right=8;up=7": 2 },
-  "history": ["card_003", "card_007", "card_001"]
+  "counter": { "right=8;up=7": 2 }
 }
 ```
 
@@ -174,7 +173,6 @@ The `attrs` object maps each of the 8 directions to a unique integer in {1…8}.
 | `lockMap` | Locked direction→value pairs |
 | `lockOrder` | FIFO queue of lock sequence |
 | `counter` | Cycle position per unique lock-state key |
-| `history` | Recent navigation trail |
 
 ---
 
@@ -270,7 +268,7 @@ The `installer` function receives the engine instance and may:
 
 | Method | Return | Description |
 |--------|--------|-------------|
-| `undo()` | `{card, pool, fullPool, lockMap, lockOrder}` or `null` | Pops the stack, sets `c_t` to the previous card. Lock state L and lock order Q are **not modified**. Pool is recalculated as P(L, c_t_prev). Returns `null` if stack is empty. |
+| `undo()` | `{card, candidates, allMatches, lockMap, lockOrder}` or `null` | Pops the stack, sets `c_t` to the previous card. Lock state L and lock order Q are **not modified**. Candidates are recalculated as P(L, c_t_prev). Returns `null` if stack is empty. |
 | `canUndo()` | `boolean` | Whether the card stack is non-empty |
 
 **Formal semantics of undo**:

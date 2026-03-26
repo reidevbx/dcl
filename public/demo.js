@@ -14,7 +14,17 @@
     'leftDown', 'down', 'rightDown'
   ];
 
-  var ARROWS = DCL.ARROWS;
+  var ARROWS = {
+    leftUp: '\u2196', up: '\u2191', rightUp: '\u2197',
+    left: '\u2190',                  right: '\u2192',
+    leftDown: '\u2199', down: '\u2193', rightDown: '\u2198'
+  };
+
+  // --- Card label helper (display concern, not in core algorithm) ---
+  function cardLabel(card) {
+    var i = card.id;
+    return i < 26 ? String.fromCharCode(65 + i) : 'A' + (i - 25);
+  }
 
   // --- i18n: read strings from <body data-i18n-*> ---
   var body = document.body;
@@ -24,6 +34,10 @@
     poolEmpty:   body.getAttribute('data-i18n-pool-empty') || 'No constraints locked yet',
     trailEmpty:  body.getAttribute('data-i18n-trail-empty') || 'No trail yet'
   };
+
+  // --- Trail tracking (display concern, managed by UI layer) ---
+  var TRAIL_MAX = 12;
+  var trail = [];
 
   // --- Initialize engine ---
   var engine = DCL.create({ cardCount: 40, seed: 2025 });
@@ -50,10 +64,19 @@
 
   // --- Navigate ---
   function navigate(dir) {
+    var prev = engine.getState().cur;
     var result = engine.navigate(dir);
     if (!result) return;
 
-    if (result.released.length) {
+    // Track trail for display
+    if (result.undone) {
+      if (trail.length) trail.pop();
+    } else if (!result.redone) {
+      trail.push(cardLabel(prev));
+      if (trail.length > TRAIL_MAX) trail.shift();
+    }
+
+    if (result.released && result.released.length) {
       var msg = result.released.map(function (r) {
         return ARROWS[r.dir] + '=' + r.val;
       }).join(', ');
@@ -62,7 +85,7 @@
     }
 
     render();
-    updateUndoBtn();
+    updateMemoryBtns();
   }
 
   // --- Render ---
@@ -71,14 +94,13 @@
     var cur = s.cur;
     var lockMap = s.lockMap;
     var lockOrder = s.lockOrder;
-    var history = s.history;
-    var fullPool = s.fullPool;
+    var allMatches = s.allMatches;
 
     renderLockBar(lockOrder, lockMap);
-    renderPoolCount(fullPool.length);
-    renderNavigator(cur, lockMap, lockOrder, fullPool, s.counter);
-    renderPoolDisplay(lockOrder, fullPool, cur);
-    renderHistory(history, cur);
+    renderPoolCount(allMatches.length);
+    renderNavigator(cur, lockMap, lockOrder, allMatches, s.counter);
+    renderPoolDisplay(lockOrder, allMatches, cur);
+    renderHistory(trail, cur);
   }
 
   function renderLockBar(lockOrder, lockMap) {
@@ -100,27 +122,27 @@
     document.getElementById('pool-count').textContent = count;
   }
 
-  function renderNavigator(cur, lockMap, lockOrder, fullPool, counter) {
+  function renderNavigator(cur, lockMap, lockOrder, allMatches, counter) {
     var nav = document.getElementById('navigator');
     nav.innerHTML = '';
 
     GRID.forEach(function (key) {
       if (key === '__center__') {
-        nav.appendChild(buildCenterCard(cur, lockMap, lockOrder, fullPool, counter));
+        nav.appendChild(buildCenterCard(cur, lockMap, lockOrder, allMatches, counter));
       } else {
         nav.appendChild(buildDirButton(key, cur, lockMap));
       }
     });
   }
 
-  function buildCenterCard(cur, lockMap, lockOrder, fullPool, counter) {
+  function buildCenterCard(cur, lockMap, lockOrder, allMatches, counter) {
     var el = document.createElement('div');
     el.id = 'current-card';
 
-    var maxDots = Math.min(fullPool.length, 8);
+    var maxDots = Math.min(allMatches.length, 8);
     var key = DCL.lockKey(lockMap, lockOrder);
     var pos = lockOrder.length
-      ? ((counter[key] || 1) - 1 + fullPool.length) % fullPool.length
+      ? ((counter[key] || 1) - 1 + allMatches.length) % allMatches.length
       : 0;
 
     var dotHtml = '';
@@ -133,7 +155,7 @@
     }
 
     el.innerHTML =
-      '<div class="card-id">' + cur.label + '</div>' +
+      '<div class="card-id">' + cardLabel(cur) + '</div>' +
       '<div class="card-sub">#' + (cur.id + 1) + '</div>' +
       dotHtml;
 
@@ -142,50 +164,67 @@
 
   function buildDirButton(dir, cur, lockMap) {
     var btn = document.createElement('button');
-    btn.className = 'dir-btn' + (dir in lockMap ? ' locked' : '');
+    var cls = 'dir-btn' + (dir in lockMap ? ' locked' : '');
+
+    // Peek info (undo/redo hints) when memory plugin is active
+    var peekHint = '';
+    if (memoryEnabled && engine.peek) {
+      var p = engine.peek(dir);
+      if (p && p.type === 'undo') {
+        cls += ' peek-undo';
+        peekHint = '<span class="dir-peek">\u21A9 ' + cardLabel(p.card) + '</span>';
+      } else if (p && p.type === 'redo') {
+        cls += ' peek-redo';
+        peekHint = '<span class="dir-peek">\u21AA ' + cardLabel(p.card) + '</span>';
+      }
+    }
+
+    btn.className = cls;
     btn.id = 'db-' + dir;
     btn.innerHTML =
       '<span class="dir-arrow">' + ARROWS[dir] + '</span>' +
-      '<span class="dir-val">' + cur.attrs[dir] + '</span>';
+      '<span class="dir-val">' + cur.attrs[dir] + '</span>' +
+      peekHint;
     btn.onclick = function () { navigate(dir); };
     return btn;
   }
 
-  function renderPoolDisplay(lockOrder, fullPool, cur) {
+  function renderPoolDisplay(lockOrder, allMatches, cur) {
     var el = document.getElementById('pool-cards');
     if (!lockOrder.length) {
       el.innerHTML = '<span class="pool-empty">' + i18n.poolEmpty + '</span>';
       return;
     }
-    var html = fullPool.slice(0, 24).map(function (c) {
-      return '<span class="pool-card' + (c.id === cur.id ? ' current' : '') + '">' + c.label + '</span>';
+    var html = allMatches.slice(0, 24).map(function (c) {
+      return '<span class="pool-card' + (c.id === cur.id ? ' current' : '') + '">' + cardLabel(c) + '</span>';
     }).join('');
-    if (fullPool.length > 24) {
-      html += '<span class="pool-card">+' + (fullPool.length - 24) + '</span>';
+    if (allMatches.length > 24) {
+      html += '<span class="pool-card">+' + (allMatches.length - 24) + '</span>';
     }
     el.innerHTML = html;
   }
 
-  function renderHistory(history, cur) {
+  function renderHistory(trailLabels, cur) {
     var el = document.getElementById('history-inner');
-    var trail = history.concat([cur.label]);
-    if (trail.length <= 1) {
+    var display = trailLabels.concat([cardLabel(cur)]);
+    if (display.length <= 1) {
       el.innerHTML = '<span class="hist-empty">' + i18n.trailEmpty + '</span>';
       return;
     }
-    el.innerHTML = trail.map(function (label, i) {
+    el.innerHTML = display.map(function (label, i) {
       return (i > 0 ? '<span class="hist-sep">\u203A</span>' : '') +
-        '<span class="hist-item' + (i === trail.length - 1 ? ' current' : '') + '">' + label + '</span>';
+        '<span class="hist-item' + (i === display.length - 1 ? ' current' : '') + '">' + label + '</span>';
     }).join('');
   }
 
   // --- Memory plugin ---
   var memoryEnabled = false;
 
-  function updateUndoBtn() {
-    var btn = document.getElementById('undo-btn');
-    if (!btn) return;
-    btn.disabled = !memoryEnabled || !engine.canUndo || !engine.canUndo();
+  function updateMemoryBtns() {
+    var undoBtn = document.getElementById('undo-btn');
+    var redoBtn = document.getElementById('redo-btn');
+    if (undoBtn) undoBtn.disabled = !memoryEnabled || !engine.canUndo();
+    if (redoBtn) redoBtn.disabled = !memoryEnabled || !engine.canRedo();
   }
 
   window.toggleMemory = function (on) {
@@ -193,28 +232,44 @@
       DCL.use(engine, 'memory');
       memoryEnabled = true;
     }
-    var btn = document.getElementById('undo-btn');
-    if (btn) btn.style.display = on ? '' : 'none';
-    updateUndoBtn();
+    var undoBtn = document.getElementById('undo-btn');
+    var redoBtn = document.getElementById('redo-btn');
+    if (undoBtn) undoBtn.style.display = on ? '' : 'none';
+    if (redoBtn) redoBtn.style.display = on ? '' : 'none';
+    updateMemoryBtns();
+    render();
   };
 
   window.undoDCL = function () {
     if (!memoryEnabled || !engine.undo) return;
     var result = engine.undo();
     if (!result) return;
+    if (trail.length) trail.pop();
     render();
-    updateUndoBtn();
+    updateMemoryBtns();
+  };
+
+  window.redoDCL = function () {
+    if (!memoryEnabled || !engine.redo) return;
+    var prev = engine.getState().cur;
+    var result = engine.redo();
+    if (!result) return;
+    trail.push(cardLabel(prev));
+    if (trail.length > TRAIL_MAX) trail.shift();
+    render();
+    updateMemoryBtns();
   };
 
   // --- Public controls ---
   window.resetDCL = function () {
     engine.reset();
+    trail = [];
     render();
-    updateUndoBtn();
+    updateMemoryBtns();
   };
 
   window.clearHistory = function () {
-    engine.clearHistory();
+    trail = [];
     render();
   };
 

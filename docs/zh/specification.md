@@ -163,8 +163,7 @@ P(L, c_t) = { c ∈ C | c ≠ c_t ∧ ∀(d, v) ∈ L : A(c, d) = v }
   "current": "card_001",
   "lockMap": { "right": 8, "up": 7 },
   "lockOrder": ["right", "up"],
-  "counter": { "right=8;up=7": 2 },
-  "history": ["card_003", "card_007", "card_001"]
+  "counter": { "right=8;up=7": 2 }
 }
 ```
 
@@ -174,7 +173,6 @@ P(L, c_t) = { c ∈ C | c ≠ c_t ∧ ∀(d, v) ∈ L : A(c, d) = v }
 | `lockMap` | 已鎖定的方向→值對應 |
 | `lockOrder` | 鎖定順序的 FIFO 佇列 |
 | `counter` | 每個唯一鎖定狀態的循環位置 |
-| `history` | 近期導航軌跡 |
 
 ---
 
@@ -270,7 +268,7 @@ DCL.use(engine, name)           // 將插件掛載到特定引擎實例
 
 | 方法 | 回傳 | 說明 |
 |------|------|------|
-| `undo()` | `{card, pool, fullPool, lockMap, lockOrder}` 或 `null` | 從堆疊彈出，將 c_t 設為前一張卡片。鎖定狀態 L 與鎖定順序 Q **不會被修改**。候選池根據 P(L, c_t_prev) 重新計算。堆疊為空時回傳 `null`。 |
+| `undo()` | `{card, candidates, allMatches, lockMap, lockOrder}` 或 `null` | 從堆疊彈出，將 c_t 設為前一張卡片。鎖定狀態 L 與鎖定順序 Q **不會被修改**。候選集根據 P(L, c_t_prev) 重新計算。堆疊為空時回傳 `null`。 |
 | `canUndo()` | `boolean` | 卡片堆疊是否非空 |
 
 **undo 的形式化語意**：

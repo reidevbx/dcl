@@ -4,10 +4,13 @@
  * Pure algorithm module with no DOM dependencies.
  * Can be used standalone or imported by a UI layer.
  *
+ * Card shape: { id: Number, attrs: { leftUp, up, ..., rightDown } }
+ * Cards are frozen (immutable) after generation.
+ *
  * Usage:
  *   var engine = DCL.create({ cardCount: 40, seed: 2025 });
  *   var result = engine.navigate('right');
- *   // result = { card, pool, released, lockMap, lockOrder }
+ *   // result = { card, candidates, allMatches, released, lockMap, lockOrder }
  */
 var DCL = (function () {
   'use strict';
@@ -19,17 +22,25 @@ var DCL = (function () {
     'leftDown', 'down', 'rightDown'
   ];
 
-  var ARROWS = {
-    leftUp: '\u2196', up: '\u2191', rightUp: '\u2197',
-    left: '\u2190',                  right: '\u2192',
-    leftDown: '\u2199', down: '\u2193', rightDown: '\u2198'
+  var OPPOSITE = {
+    left: 'right', right: 'left',
+    up: 'down', down: 'up',
+    leftUp: 'rightDown', rightDown: 'leftUp',
+    rightUp: 'leftDown', leftDown: 'rightUp'
   };
+
+  // --- Named constants ---
+  var LCG_MULT = 1664525;
+  var LCG_INC  = 1013904223;
+  var SEED_STEP = 31337;
+  var UNDO_MAX = 50;
+  var COUNTER_MAX_KEYS = 100;
 
   // --- Seeded shuffle (LCG) ---
   function shuffle(arr, seed) {
     var a = arr.slice();
     for (var i = a.length - 1; i > 0; i--) {
-      seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+      seed = (seed * LCG_MULT + LCG_INC) & 0xffffffff;
       var j = (seed >>> 0) % (i + 1);
       var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
     }
@@ -40,37 +51,25 @@ var DCL = (function () {
   function generateCards(count, baseSeed) {
     var cards = [];
     for (var i = 0; i < count; i++) {
-      var vals = shuffle([1, 2, 3, 4, 5, 6, 7, 8], baseSeed + i * 31337);
+      var vals = shuffle([1, 2, 3, 4, 5, 6, 7, 8], baseSeed + i * SEED_STEP);
       var attrs = {};
       for (var d = 0; d < DIRS.length; d++) attrs[DIRS[d]] = vals[d];
-      cards.push({
-        id: i,
-        label: i < 26 ? String.fromCharCode(65 + i) : 'A' + (i - 25),
-        attrs: attrs
-      });
+      var card = { id: i, attrs: attrs };
+      Object.freeze(attrs);
+      Object.freeze(card);
+      cards.push(card);
     }
     return cards;
   }
 
   // --- Query functions ---
 
-  /** P(L, ct) — candidate pool excluding current card */
-  function getPool(cards, lockMap, excludeId) {
+  /** Match cards against lock constraints, optionally excluding one card by id */
+  function matchCards(cards, lockMap, excludeId) {
     var keys = Object.keys(lockMap);
+    if (!keys.length && excludeId === undefined) return cards;
     return cards.filter(function (c) {
-      if (c.id === excludeId) return false;
-      for (var i = 0; i < keys.length; i++) {
-        if (c.attrs[keys[i]] !== lockMap[keys[i]]) return false;
-      }
-      return true;
-    });
-  }
-
-  /** All cards matching locks (including current) */
-  function getAllMatch(cards, lockMap) {
-    var keys = Object.keys(lockMap);
-    if (!keys.length) return cards;
-    return cards.filter(function (c) {
+      if (excludeId !== undefined && c.id === excludeId) return false;
       for (var i = 0; i < keys.length; i++) {
         if (c.attrs[keys[i]] !== lockMap[keys[i]]) return false;
       }
@@ -91,6 +90,10 @@ var DCL = (function () {
     return target;
   }
 
+  // --- Private internals registry (keyed by engine id) ---
+  var internals = {};
+  var nextId = 1;
+
   // --- Engine factory ---
 
   function create(opts) {
@@ -105,8 +108,7 @@ var DCL = (function () {
         cur: startCard,
         lockMap: {},
         lockOrder: [],
-        counter: {},
-        history: []
+        counter: {}
       };
     }
 
@@ -114,7 +116,7 @@ var DCL = (function () {
      * nav(d) — core navigation step
      *
      * Returns an object describing what happened:
-     *   { card, pool, fullPool, released, lockMap, lockOrder }
+     *   { card, candidates, allMatches, released, lockMap, lockOrder }
      */
     function navigate(dir) {
       var cur = state.cur;
@@ -127,36 +129,40 @@ var DCL = (function () {
         nOrd.push(dir);
       }
 
-      // Step 2: compute candidate pool
-      var pool = getPool(cards, nMap, cur.id);
+      // Step 2: compute candidates
+      var candidates = matchCards(cards, nMap, cur.id);
 
       // Step 3: FIFO unlock until non-empty
       var released = [];
-      while (!pool.length && nOrd.length > 0) {
+      while (!candidates.length && nOrd.length > 0) {
         var oldest = nOrd.shift();
         released.push({ dir: oldest, val: nMap[oldest] });
         delete nMap[oldest];
-        pool = getPool(cards, nMap, cur.id);
+        candidates = matchCards(cards, nMap, cur.id);
       }
 
-      if (!pool.length) return null; // should not happen if |C| > 1
+      if (!candidates.length) return null; // should not happen if |C| > 1
 
       // Update state
       state.lockMap = nMap;
       state.lockOrder = nOrd;
-      state.history.push(cur.label);
-      if (state.history.length > 12) state.history.shift();
-
       // Step 4: cycle
       var key = lockKey(nMap, nOrd);
       if (!(key in state.counter)) state.counter[key] = 0;
-      state.cur = pool[state.counter[key] % pool.length];
-      state.counter[key] = (state.counter[key] + 1) % pool.length;
+      state.cur = candidates[state.counter[key] % candidates.length];
+      state.counter[key] = (state.counter[key] + 1) % candidates.length;
+
+      // Prevent unbounded counter growth
+      if (Object.keys(state.counter).length > COUNTER_MAX_KEYS) {
+        var fresh = {};
+        fresh[key] = state.counter[key];
+        state.counter = fresh;
+      }
 
       return {
         card: state.cur,
-        pool: pool,
-        fullPool: getAllMatch(cards, nMap),
+        candidates: candidates,
+        allMatches: matchCards(cards, nMap),
         released: released,
         lockMap: assign({}, nMap),
         lockOrder: nOrd.slice()
@@ -167,33 +173,34 @@ var DCL = (function () {
       state = createState(cards[0]);
     }
 
-    function clearHistory() {
-      state.history = [];
-    }
-
     function getState() {
       return {
         cur: state.cur,
         lockMap: assign({}, state.lockMap),
         lockOrder: state.lockOrder.slice(),
-        history: state.history.slice(),
-        fullPool: getAllMatch(cards, state.lockMap),
-        counter: state.counter
+        allMatches: matchCards(cards, state.lockMap),
+        counter: assign({}, state.counter)
       };
     }
 
-    function _setCur(card) {
-      state.cur = card;
+    /** Restore full internal state (used by plugins via internals registry) */
+    function _setState(s) {
+      state.cur = s.cur;
+      state.lockMap = s.lockMap;
+      state.lockOrder = s.lockOrder;
+      state.counter = s.counter;
     }
 
-    return {
+    var engineId = nextId++;
+    var engine = {
       cards: cards,
       navigate: navigate,
       reset: reset,
-      clearHistory: clearHistory,
       getState: getState,
-      _setCur: _setCur
+      _id: engineId
     };
+    internals[engineId] = { setState: _setState };
+    return engine;
   }
 
   // --- Plugin system ---
@@ -206,62 +213,135 @@ var DCL = (function () {
 
   function use(engine, name) {
     if (!plugins[name]) throw new Error('DCL: unknown plugin "' + name + '"');
-    plugins[name](engine);
+    plugins[name](engine, internals[engine._id] || {});
     return engine;
   }
 
-  // --- Built-in plugin: memory (undo) ---
-  // Only tracks card history. Locks are preserved, pool recalculated.
+  // --- Built-in plugin: memory (undo/redo with direction awareness) ---
+  //
+  // Stores full state snapshots so undo/redo restores locks correctly.
+  // Detects opposite-direction navigation and converts it to undo/redo.
 
-  register('memory', function (engine) {
-    var cardStack = [];
-    var maxSize = 50;
+  register('memory', function (engine, priv) {
+    var undoStack = [];
+    var redoStack = [];
+    var lastDir = null;
+    var maxSize = UNDO_MAX;
 
     var _navigate = engine.navigate;
     var _reset = engine.reset;
+    var _getState = engine.getState;
+
+    // getState() already returns fully cloned properties
+    function snapshot() { return _getState.call(engine); }
+
+    // Clone before writing back so the stored snapshot stays immutable
+    function restore(snap) {
+      priv.setState({
+        cur: snap.cur,
+        lockMap: assign({}, snap.lockMap),
+        lockOrder: snap.lockOrder.slice(),
+        counter: assign({}, snap.counter)
+      });
+    }
+
+    function resultFromState(flags) {
+      var s = _getState.call(engine);
+      return assign({
+        card: s.cur,
+        candidates: matchCards(engine.cards, s.lockMap, s.cur.id),
+        allMatches: matchCards(engine.cards, s.lockMap),
+        released: [],
+        lockMap: s.lockMap,
+        lockOrder: s.lockOrder
+      }, flags);
+    }
+
+    // Detect whether dir would trigger undo or redo
+    function dirHint(dir) {
+      if (lastDir && dir === OPPOSITE[lastDir] && undoStack.length) {
+        return 'undo';
+      }
+      if (lastDir === null && redoStack.length && redoStack[redoStack.length - 1].dir === dir) {
+        return 'redo';
+      }
+      return null;
+    }
 
     engine.navigate = function (dir) {
-      var before = engine.getState().cur;
-      var result = _navigate(dir);
+      var hint = dirHint(dir);
+      if (hint === 'undo') return engine.undo();
+      if (hint === 'redo') return engine.redo();
+
+      var snap = snapshot();
+      var result = _navigate.call(engine, dir);
       if (result) {
-        cardStack.push(before);
-        if (cardStack.length > maxSize) cardStack.shift();
+        undoStack.push(snap);
+        if (undoStack.length > maxSize) undoStack.shift();
+        redoStack = [];
+        lastDir = dir;
+        result.undone = false;
+        result.redone = false;
       }
       return result;
     };
 
     engine.reset = function () {
-      cardStack = [];
-      _reset();
+      undoStack = [];
+      redoStack = [];
+      lastDir = null;
+      _reset.call(engine);
     };
 
     engine.undo = function () {
-      if (!cardStack.length) return null;
-      var prev = cardStack.pop();
-      engine._setCur(prev);
-      var s = engine.getState();
-      return {
-        card: prev,
-        pool: getPool(engine.cards, s.lockMap, prev.id),
-        fullPool: getAllMatch(engine.cards, s.lockMap),
-        lockMap: s.lockMap,
-        lockOrder: s.lockOrder
-      };
+      if (!undoStack.length) return null;
+      redoStack.push({ state: snapshot(), dir: lastDir });
+      restore(undoStack.pop());
+      lastDir = null;
+      return resultFromState({ undone: true, redone: false });
     };
 
-    engine.canUndo = function () { return cardStack.length > 0; };
+    engine.redo = function () {
+      if (!redoStack.length) return null;
+      undoStack.push(snapshot());
+      var entry = redoStack.pop();
+      restore(entry.state);
+      lastDir = entry.dir;
+      return resultFromState({ undone: false, redone: true });
+    };
+
+    engine.canUndo = function () { return undoStack.length > 0; };
+    engine.canRedo = function () { return redoStack.length > 0; };
+
+    engine.peek = function (dir) {
+      var hint = dirHint(dir);
+      if (hint === 'undo') return { card: undoStack[undoStack.length - 1].cur, type: 'undo' };
+      if (hint === 'redo') return { card: redoStack[redoStack.length - 1].state.cur, type: 'redo' };
+      // Simulate navigate without mutating state
+      var snap = snapshot();
+      var result = _navigate.call(engine, dir);
+      restore(snap);
+      return result ? { card: result.card, type: 'navigate' } : null;
+    };
+
+    engine.peekAll = function () {
+      var out = {};
+      for (var i = 0; i < DIRS.length; i++) {
+        out[DIRS[i]] = engine.peek(DIRS[i]);
+      }
+      return out;
+    };
   });
 
   // Public API
   var api = {
     DIRS: DIRS,
-    ARROWS: ARROWS,
     create: create,
     register: register,
     use: use,
     generateCards: generateCards,
-    getPool: getPool,
-    getAllMatch: getAllMatch,
+    getPool: function (cards, lockMap, excludeId) { return matchCards(cards, lockMap, excludeId); },
+    getAllMatch: function (cards, lockMap) { return matchCards(cards, lockMap); },
     lockKey: lockKey
   };
 
