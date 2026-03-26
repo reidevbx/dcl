@@ -20,10 +20,15 @@
     leftDown: '\u2199', down: '\u2193', rightDown: '\u2198'
   };
 
-  // --- Card label helper (display concern, not in core algorithm) ---
+  // --- Display helpers (presentation concern, not in core algorithm) ---
+  var CATEGORIES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+  function categoryLabel(val) {
+    return CATEGORIES[(val - 1) % CATEGORIES.length];
+  }
+
   function cardLabel(card) {
-    var i = card.id;
-    return i < 26 ? String.fromCharCode(65 + i) : 'A' + (i - 25);
+    return String(card.id + 1);
   }
 
   // --- i18n: read strings from <body data-i18n-*> ---
@@ -40,7 +45,7 @@
   var trail = [];
 
   // --- Initialize engine ---
-  var engine = DCL.create({ cardCount: 40, seed: 2025 });
+  var engine = DCL.create({ cardCount: 100, seed: 2025 });
 
   // --- Toast ---
   var toastTimer = null;
@@ -78,7 +83,7 @@
 
     if (result.released && result.released.length) {
       var msg = result.released.map(function (r) {
-        return ARROWS[r.dir] + '=' + r.val;
+        return ARROWS[r.dir] + '=' + categoryLabel(r.val);
       }).join(', ');
       showToast(msg);
       flashUnlocked(result.released.map(function (r) { return r.dir; }));
@@ -113,7 +118,7 @@
     lockOrder.forEach(function (d) {
       var tag = document.createElement('span');
       tag.className = 'lock-tag';
-      tag.textContent = ARROWS[d] + ' = ' + lockMap[d];
+      tag.textContent = ARROWS[d] + ' = ' + categoryLabel(lockMap[d]);
       bar.appendChild(tag);
     });
   }
@@ -155,8 +160,7 @@
     }
 
     el.innerHTML =
-      '<div class="card-id">' + cardLabel(cur) + '</div>' +
-      '<div class="card-sub">#' + (cur.id + 1) + '</div>' +
+      '<div class="card-id">#' + cardLabel(cur) + '</div>' +
       dotHtml;
 
     return el;
@@ -183,7 +187,7 @@
     btn.id = 'db-' + dir;
     btn.innerHTML =
       '<span class="dir-arrow">' + ARROWS[dir] + '</span>' +
-      '<span class="dir-val">' + cur.attrs[dir] + '</span>' +
+      '<span class="dir-val">' + categoryLabel(cur.attrs[dir]) + '</span>' +
       peekHint;
     btn.onclick = function () { navigate(dir); };
     return btn;
