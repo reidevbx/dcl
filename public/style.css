@@ -361,10 +361,16 @@ h1 span { color: var(--accent-light); }
   color: var(--muted);
   transition: all .15s;
 }
+.pool-card.visited {
+  border-color: rgba(139,152,255,0.25);
+  color: var(--accent-light);
+  opacity: .7;
+}
 .pool-card.current {
   background: var(--accent-bg);
   border-color: var(--accent-border);
   color: var(--accent-light);
+  opacity: 1;
 }
 
 .pool-empty {

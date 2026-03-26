@@ -43,6 +43,7 @@
   // --- Trail tracking (display concern, managed by UI layer) ---
   var TRAIL_MAX = 12;
   var trail = [];
+  var visited = {};  // card id → true, tracks all visited cards
 
   // --- Initialize engine ---
   var engine = DCL.create({ cardCount: 100, seed: 2025 });
@@ -70,8 +71,11 @@
   // --- Navigate ---
   function navigate(dir) {
     var prev = engine.getState().cur;
+    visited[prev.id] = true;
     var result = engine.navigate(dir);
     if (!result) return;
+
+    visited[result.card.id] = true;
 
     // Track trail for display
     if (result.undone) {
@@ -200,7 +204,10 @@
       return;
     }
     var html = allMatches.slice(0, 24).map(function (c) {
-      return '<span class="pool-card' + (c.id === cur.id ? ' current' : '') + '">' + cardLabel(c) + '</span>';
+      var cls = 'pool-card';
+      if (c.id === cur.id) cls += ' current';
+      else if (visited[c.id]) cls += ' visited';
+      return '<span class="' + cls + '">' + cardLabel(c) + '</span>';
     }).join('');
     if (allMatches.length > 24) {
       html += '<span class="pool-card">+' + (allMatches.length - 24) + '</span>';
@@ -268,6 +275,7 @@
   window.resetDCL = function () {
     engine.reset();
     trail = [];
+    visited = {};
     render();
     updateMemoryBtns();
   };

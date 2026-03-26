@@ -223,19 +223,17 @@ var DCL = (function () {
   // Detects opposite-direction navigation and converts it to undo/redo.
 
   register('memory', function (engine, priv) {
-    var undoStack = [];
-    var redoStack = [];
-    var lastDir = null;
+    var undoStack = [];   // each entry: { state, dir }
+    var redoStack = [];   // each entry: { state, dir }
+    var dirStack  = [];   // path of directions taken, enables full backtracking
     var maxSize = UNDO_MAX;
 
     var _navigate = engine.navigate;
     var _reset = engine.reset;
     var _getState = engine.getState;
 
-    // getState() already returns fully cloned properties
     function snapshot() { return _getState.call(engine); }
 
-    // Clone before writing back so the stored snapshot stays immutable
     function restore(snap) {
       priv.setState({
         cur: snap.cur,
@@ -257,12 +255,12 @@ var DCL = (function () {
       }, flags);
     }
 
-    // Detect whether dir would trigger undo or redo
+    // Check if dir backtracks (opposite of the last direction in the path)
     function dirHint(dir) {
-      if (lastDir && dir === OPPOSITE[lastDir] && undoStack.length) {
+      if (dirStack.length && dir === OPPOSITE[dirStack[dirStack.length - 1]]) {
         return 'undo';
       }
-      if (lastDir === null && redoStack.length && redoStack[redoStack.length - 1].dir === dir) {
+      if (!dirStack.length && redoStack.length && redoStack[redoStack.length - 1].dir === dir) {
         return 'redo';
       }
       return null;
@@ -276,10 +274,10 @@ var DCL = (function () {
       var snap = snapshot();
       var result = _navigate.call(engine, dir);
       if (result) {
-        undoStack.push(snap);
+        undoStack.push({ state: snap, dir: dir });
         if (undoStack.length > maxSize) undoStack.shift();
         redoStack = [];
-        lastDir = dir;
+        dirStack.push(dir);
         result.undone = false;
         result.redone = false;
       }
@@ -289,24 +287,25 @@ var DCL = (function () {
     engine.reset = function () {
       undoStack = [];
       redoStack = [];
-      lastDir = null;
+      dirStack  = [];
       _reset.call(engine);
     };
 
     engine.undo = function () {
       if (!undoStack.length) return null;
-      redoStack.push({ state: snapshot(), dir: lastDir });
-      restore(undoStack.pop());
-      lastDir = null;
+      var entry = undoStack.pop();
+      redoStack.push({ state: snapshot(), dir: entry.dir });
+      restore(entry.state);
+      dirStack.pop();
       return resultFromState({ undone: true, redone: false });
     };
 
     engine.redo = function () {
       if (!redoStack.length) return null;
-      undoStack.push(snapshot());
       var entry = redoStack.pop();
+      undoStack.push({ state: snapshot(), dir: entry.dir });
       restore(entry.state);
-      lastDir = entry.dir;
+      dirStack.push(entry.dir);
       return resultFromState({ undone: false, redone: true });
     };
 
@@ -315,9 +314,8 @@ var DCL = (function () {
 
     engine.peek = function (dir) {
       var hint = dirHint(dir);
-      if (hint === 'undo') return { card: undoStack[undoStack.length - 1].cur, type: 'undo' };
+      if (hint === 'undo') return { card: undoStack[undoStack.length - 1].state.cur, type: 'undo' };
       if (hint === 'redo') return { card: redoStack[redoStack.length - 1].state.cur, type: 'redo' };
-      // Simulate navigate without mutating state
       var snap = snapshot();
       var result = _navigate.call(engine, dir);
       restore(snap);
