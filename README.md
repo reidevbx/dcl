@@ -112,28 +112,30 @@ dcl/
 DCL supports an opt-in plugin architecture. Plugins extend the engine without altering the core algorithm.
 
 ```js
-var engine = DCL.create({ cardCount: 100 });
+var engine = DCL.create({ cardCount: 100, categories: 20, seed: 2025 });
 
 // Opt-in: enable the memory plugin
 DCL.use(engine, 'memory');
 
-engine.navigate('right');
-engine.navigate('up');
-engine.undo();       // go back to the previous card (locks preserved)
-engine.canUndo();    // true / false
+engine.navigate('right');   // lock right dimension
+engine.navigate('up');      // lock up dimension
+engine.navigate('down');    // opposite of up → auto-undo back
+engine.navigate('left');    // opposite of right → auto-undo back to start
+engine.canUndo();           // true / false
 ```
 
 ### Built-in Plugins
 
 | Plugin | Methods Added | Description |
 |--------|--------------|-------------|
-| `memory` | `undo()`, `canUndo()` | Tracks card history. Undo reverts to the previous card while preserving all lock state. The candidate pool is recalculated based on current constraints. |
+| `memory` | `undo()`, `redo()`, `canUndo()`, `canRedo()`, `peek(dir)`, `peekAll()` | Full path backtracking. Moving in the opposite direction auto-undoes. The entire path is retraced step by step — not just the last move. Lock state is fully restored on each undo. |
 
 ### Custom Plugins
 
 ```js
-DCL.register('myPlugin', function (engine) {
+DCL.register('myPlugin', function (engine, priv) {
   // wrap or extend engine methods
+  // priv contains internal helpers (e.g., priv.setState)
 });
 DCL.use(engine, 'myPlugin');
 ```

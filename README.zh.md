@@ -112,28 +112,30 @@ dcl/
 DCL 支援可選的插件架構。插件可以擴展引擎功能，而不改動核心演算法。
 
 ```js
-var engine = DCL.create({ cardCount: 100 });
+var engine = DCL.create({ cardCount: 100, categories: 20, seed: 2025 });
 
 // 可選：啟用記憶插件
 DCL.use(engine, 'memory');
 
-engine.navigate('right');
-engine.navigate('up');
-engine.undo();       // 回到前一張卡片（鎖定狀態維持不變）
-engine.canUndo();    // true / false
+engine.navigate('right');   // 鎖定右方向維度
+engine.navigate('up');      // 鎖定上方向維度
+engine.navigate('down');    // down 是 up 的反方向 → 自動回溯
+engine.navigate('left');    // left 是 right 的反方向 → 自動回溯至起點
+engine.canUndo();           // true / false
 ```
 
 ### 內建插件
 
 | 插件 | 新增方法 | 說明 |
 |------|---------|------|
-| `memory` | `undo()`, `canUndo()` | 記錄卡片歷史。回退時切回前一張卡片，鎖定狀態不變，候選池根據當前約束重新計算。 |
+| `memory` | `undo()`, `redo()`, `canUndo()`, `canRedo()`, `peek(dir)`, `peekAll()` | 完整路徑回溯。往反方向移動自動觸發 undo，整條路徑逐步回溯 — 不只是上一步。每次 undo 都完整恢復鎖定狀態。 |
 
 ### 自訂插件
 
 ```js
-DCL.register('myPlugin', function (engine) {
+DCL.register('myPlugin', function (engine, priv) {
   // 包裝或擴展 engine 的方法
+  // priv 包含內部工具（如 priv.setState）
 });
 DCL.use(engine, 'myPlugin');
 ```
