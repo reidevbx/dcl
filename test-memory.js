@@ -277,6 +277,58 @@ console.log('\n=== Test 12: _setState not on public API ===');
 })();
 
 // ============================================================
+// Test 13: cardCount < 2 throws error
+// ============================================================
+console.log('\n=== Test 13: cardCount < 2 throws error ===');
+(function () {
+  var threw = false;
+  try { DCL.create({ cardCount: 1 }); } catch (err) { threw = true; }
+  assert(threw, 'cardCount=1 throws error');
+})();
+
+// ============================================================
+// Test 14: categories < 8 throws error
+// ============================================================
+console.log('\n=== Test 14: categories < 8 throws error ===');
+(function () {
+  var threw = false;
+  try { DCL.create({ cardCount: 10, categories: 3 }); } catch (err) { threw = true; }
+  assert(threw, 'categories=3 throws error');
+})();
+
+// ============================================================
+// Test 15: dirStack stays in sync after maxSize overflow
+// ============================================================
+console.log('\n=== Test 15: dirStack/undoStack sync after overflow ===');
+(function () {
+  var e = DCL.create({ cardCount: 40, seed: 2025 });
+  DCL.use(e, 'memory');
+
+  // Navigate 60 times (exceeds UNDO_MAX=50)
+  var dirs = ['right', 'up', 'right', 'up', 'right', 'up'];
+  for (var i = 0; i < 60; i++) {
+    e.navigate(dirs[i % dirs.length]);
+  }
+
+  // Should be able to undo 50 times without issue
+  var undoCount = 0;
+  while (e.canUndo()) {
+    var r = e.undo();
+    if (!r) break;
+    undoCount++;
+  }
+  assert(undoCount === 50, 'can undo exactly 50 times (maxSize)');
+  assert(!e.canUndo(), 'canUndo is false after full undo');
+
+  // After full undo, redo should work
+  if (e.canRedo()) {
+    var redo = e.redo();
+    assert(redo !== null, 'redo works after full undo from overflow');
+    assert(redo.redone === true, 'redo flag is true');
+  }
+})();
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50));

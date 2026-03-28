@@ -41,7 +41,7 @@ var DCL = (function () {
     var a = arr.slice();
     for (var i = a.length - 1; i > 0; i--) {
       seed = (seed * LCG_MULT + LCG_INC) & 0xffffffff;
-      var j = (seed >>> 0) % (i + 1);
+      var j = Math.floor(((seed >>> 0) / 0x100000000) * (i + 1));
       var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
     }
     return a;
@@ -67,19 +67,69 @@ var DCL = (function () {
     return cards;
   }
 
+  // --- Inverted index for O(1) constraint lookups ---
+
+  function buildIndex(cards) {
+    var idx = {};
+    for (var d = 0; d < DIRS.length; d++) {
+      idx[DIRS[d]] = {};
+    }
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      for (var d = 0; d < DIRS.length; d++) {
+        var dir = DIRS[d];
+        var val = c.attrs[dir];
+        if (!idx[dir][val]) idx[dir][val] = [];
+        idx[dir][val].push(c);
+      }
+    }
+    return idx;
+  }
+
   // --- Query functions ---
 
-  /** Match cards against lock constraints, optionally excluding one card by id */
-  function matchCards(cards, lockMap, excludeId) {
+  /** Match cards using inverted index intersection (fast path) or linear scan (fallback) */
+  function matchCards(cards, lockMap, excludeId, index) {
     var keys = Object.keys(lockMap);
     if (!keys.length && excludeId === undefined) return cards;
-    return cards.filter(function (c) {
-      if (excludeId !== undefined && c.id === excludeId) return false;
-      for (var i = 0; i < keys.length; i++) {
-        if (c.attrs[keys[i]] !== lockMap[keys[i]]) return false;
+
+    var result;
+    if (index && keys.length > 0) {
+      // Pick the smallest bucket as starting set
+      var smallest = keys[0];
+      for (var i = 1; i < keys.length; i++) {
+        var bucket = index[keys[i]] && index[keys[i]][lockMap[keys[i]]];
+        var sBucket = index[smallest] && index[smallest][lockMap[smallest]];
+        if (bucket && sBucket && bucket.length < sBucket.length) smallest = keys[i];
       }
-      return true;
-    });
+      var base = (index[smallest] && index[smallest][lockMap[smallest]]) || [];
+      if (keys.length === 1) {
+        result = base;
+      } else {
+        result = [];
+        for (var i = 0; i < base.length; i++) {
+          var c = base[i];
+          var match = true;
+          for (var k = 0; k < keys.length; k++) {
+            if (keys[k] === smallest) continue;
+            if (c.attrs[keys[k]] !== lockMap[keys[k]]) { match = false; break; }
+          }
+          if (match) result.push(c);
+        }
+      }
+    } else {
+      result = cards.filter(function (c) {
+        for (var i = 0; i < keys.length; i++) {
+          if (c.attrs[keys[i]] !== lockMap[keys[i]]) return false;
+        }
+        return true;
+      });
+    }
+
+    if (excludeId !== undefined) {
+      result = result.filter(function (c) { return c.id !== excludeId; });
+    }
+    return result;
   }
 
   /** Lock-state key for cycle counter */
@@ -106,7 +156,10 @@ var DCL = (function () {
     var cardCount = opts.cardCount || 40;
     var baseSeed = opts.seed || 2025;
     var categories = opts.categories || 8;
+    if (cardCount < 2) throw new Error('DCL: cardCount must be >= 2');
+    if (categories < 8) throw new Error('DCL: categories must be >= 8');
     var cards = opts.cards || generateCards(cardCount, baseSeed, categories);
+    var _index = buildIndex(cards);
     var state = createState(cards[0]);
 
     function createState(startCard) {
@@ -136,7 +189,7 @@ var DCL = (function () {
       }
 
       // Step 2: compute candidates
-      var candidates = matchCards(cards, nMap, cur.id);
+      var candidates = matchCards(cards, nMap, cur.id, _index);
 
       // Step 3: FIFO unlock until non-empty
       var released = [];
@@ -144,7 +197,7 @@ var DCL = (function () {
         var oldest = nOrd.shift();
         released.push({ dir: oldest, val: nMap[oldest] });
         delete nMap[oldest];
-        candidates = matchCards(cards, nMap, cur.id);
+        candidates = matchCards(cards, nMap, cur.id, _index);
       }
 
       if (!candidates.length) return null; // should not happen if |C| > 1
@@ -168,7 +221,7 @@ var DCL = (function () {
       return {
         card: state.cur,
         candidates: candidates,
-        allMatches: matchCards(cards, nMap),
+        allMatches: matchCards(cards, nMap, undefined, _index),
         released: released,
         lockMap: assign({}, nMap),
         lockOrder: nOrd.slice()
@@ -180,13 +233,22 @@ var DCL = (function () {
     }
 
     function getState() {
-      return {
+      var s = {
         cur: state.cur,
         lockMap: assign({}, state.lockMap),
         lockOrder: state.lockOrder.slice(),
-        allMatches: matchCards(cards, state.lockMap),
         counter: assign({}, state.counter)
       };
+      // Lazy getter — allMatches is only computed when accessed
+      var _allMatches;
+      Object.defineProperty(s, 'allMatches', {
+        enumerable: true,
+        get: function () {
+          if (!_allMatches) _allMatches = matchCards(cards, state.lockMap, undefined, _index);
+          return _allMatches;
+        }
+      });
+      return s;
     }
 
     /** Restore full internal state (used by plugins via internals registry) */
@@ -205,7 +267,7 @@ var DCL = (function () {
       getState: getState,
       _id: engineId
     };
-    internals[engineId] = { setState: _setState };
+    internals[engineId] = { setState: _setState, index: _index };
     return engine;
   }
 
@@ -253,8 +315,8 @@ var DCL = (function () {
       var s = _getState.call(engine);
       return assign({
         card: s.cur,
-        candidates: matchCards(engine.cards, s.lockMap, s.cur.id),
-        allMatches: matchCards(engine.cards, s.lockMap),
+        candidates: matchCards(engine.cards, s.lockMap, s.cur.id, priv.index),
+        allMatches: matchCards(engine.cards, s.lockMap, undefined, priv.index),
         released: [],
         lockMap: s.lockMap,
         lockOrder: s.lockOrder
@@ -281,7 +343,10 @@ var DCL = (function () {
       var result = _navigate.call(engine, dir);
       if (result) {
         undoStack.push({ state: snap, dir: dir });
-        if (undoStack.length > maxSize) undoStack.shift();
+        if (undoStack.length > maxSize) {
+          undoStack.shift();
+          dirStack.shift();
+        }
         redoStack = [];
         dirStack.push(dir);
         result.undone = false;

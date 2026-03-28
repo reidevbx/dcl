@@ -44,6 +44,37 @@
   var trail = [];
   var visited = {};  // card id → true, tracks all visited cards
 
+  // --- Image preloading strategy ---
+  // Cards may optionally have a .src property pointing to an image URL.
+  // preloadImages: prefetch images for peek targets (next possible cards)
+  // lazyImage: create an <img> with loading="lazy" for pool display
+
+  var _preloaded = {};  // url → true, avoids duplicate preloads
+
+  function preloadImage(url) {
+    if (!url || _preloaded[url]) return;
+    _preloaded[url] = true;
+    var img = new Image();
+    img.src = url;
+  }
+
+  function preloadPeekTargets() {
+    if (!memoryEnabled || !engine.peekAll) return;
+    var peeks = engine.peekAll();
+    for (var d in peeks) {
+      if (peeks[d] && peeks[d].card && peeks[d].card.src) {
+        preloadImage(peeks[d].card.src);
+      }
+    }
+  }
+
+  function cardImageHtml(card, cls) {
+    if (card.src) {
+      return '<img class="' + (cls || '') + '" src="' + card.src + '" loading="lazy" alt="#' + cardLabel(card) + '">';
+    }
+    return '';
+  }
+
   // --- Initialize engine ---
   var engine = DCL.create({ cardCount: 100, categories: 20, seed: 2025 });
 
@@ -94,6 +125,7 @@
 
     render();
     updateMemoryBtns();
+    preloadPeekTargets();
   }
 
   // --- Render ---
@@ -163,6 +195,7 @@
     }
 
     el.innerHTML =
+      cardImageHtml(cur, 'card-img') +
       '<div class="card-id">#' + cardLabel(cur) + '</div>' +
       dotHtml;
 
@@ -206,7 +239,7 @@
       var cls = 'pool-card';
       if (c.id === cur.id) cls += ' current';
       else if (visited[c.id]) cls += ' visited';
-      return '<span class="' + cls + '">' + cardLabel(c) + '</span>';
+      return '<span class="' + cls + '">' + cardImageHtml(c, 'pool-img') + cardLabel(c) + '</span>';
     }).join('');
     if (allMatches.length > 24) {
       html += '<span class="pool-card">+' + (allMatches.length - 24) + '</span>';
