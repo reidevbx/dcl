@@ -1,6 +1,6 @@
 {
   "name": "@reichill/dcl",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Directional Constraint Locking — a spatial-movement-driven multidimensional filtering algorithm",
   "main": "public/dcl.js",
   "files": [
