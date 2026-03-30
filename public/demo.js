@@ -138,7 +138,7 @@
 
     renderLockBar(lockOrder, lockMap);
     renderPoolCount(allMatches.length);
-    renderNavigator(cur, lockMap, lockOrder, allMatches, s.counter);
+    renderNavigator(cur, lockMap, lockOrder, allMatches);
     renderPoolDisplay(lockOrder, allMatches, cur);
     renderHistory(trail, cur);
   }
@@ -162,28 +162,30 @@
     document.getElementById('pool-count').textContent = count;
   }
 
-  function renderNavigator(cur, lockMap, lockOrder, allMatches, counter) {
+  function renderNavigator(cur, lockMap, lockOrder, allMatches) {
     var nav = document.getElementById('navigator');
     nav.innerHTML = '';
 
     GRID.forEach(function (key) {
       if (key === '__center__') {
-        nav.appendChild(buildCenterCard(cur, lockMap, lockOrder, allMatches, counter));
+        nav.appendChild(buildCenterCard(cur, lockMap, lockOrder, allMatches));
       } else {
         nav.appendChild(buildDirButton(key, cur, lockMap));
       }
     });
   }
 
-  function buildCenterCard(cur, lockMap, lockOrder, allMatches, counter) {
+  function buildCenterCard(cur, lockMap, lockOrder, allMatches) {
     var el = document.createElement('div');
     el.id = 'current-card';
 
     var maxDots = Math.min(allMatches.length, 8);
-    var key = DCL.lockKey(lockMap, lockOrder);
-    var pos = lockOrder.length
-      ? ((counter[key] || 1) - 1 + allMatches.length) % allMatches.length
-      : 0;
+    var pos = 0;
+    if (lockOrder.length) {
+      for (var p = 0; p < allMatches.length; p++) {
+        if (allMatches[p].id === cur.id) { pos = p; break; }
+      }
+    }
 
     var dotHtml = '';
     if (maxDots > 1) {
