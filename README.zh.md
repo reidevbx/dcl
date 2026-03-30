@@ -128,7 +128,7 @@ engine.canUndo();           // true / false
 
 | 插件 | 新增方法 | 說明 |
 |------|---------|------|
-| `memory` | `undo()`, `redo()`, `canUndo()`, `canRedo()`, `peek(dir)`, `peekAll()` | 完整路徑回溯。往反方向移動自動觸發 undo，整條路徑逐步回溯 — 不只是上一步。每次 undo 都完整恢復鎖定狀態。 |
+| `memory` | `undo()`, `redo()`, `canUndo()`, `canRedo()`, `peek(dir)`, `peekAll()` | 完整路徑回溯。往反方向移動自動觸發 undo。每次 undo 都完整恢復鎖定狀態。`peek`/`peekAll` 具冪等性 — 同一狀態下多次呼叫回傳相同結果。 |
 
 ### 自訂插件
 

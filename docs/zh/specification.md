@@ -1,7 +1,7 @@
 # DCL 演算法規格書
 
 **方向約束鎖定（Directional Constraint Locking）**
-版本 0.5 — 2026-03-30
+版本 0.6 — 2026-03-30
 
 ---
 
@@ -275,7 +275,11 @@ DCL.use(engine, name)           // 將插件掛載到特定引擎實例
 | 方法 | 回傳 | 說明 |
 |------|------|------|
 | `undo()` | `{card, candidates, allMatches, lockMap, lockOrder}` 或 `null` | 從堆疊彈出，將 c_t 設為前一張卡片。鎖定狀態 L 與鎖定順序 Q **不會被修改**。候選集根據 P(L, c_t_prev) 重新計算。堆疊為空時回傳 `null`。 |
+| `redo()` | 同上 | 重做上一次被撤銷的操作。 |
 | `canUndo()` | `boolean` | 卡片堆疊是否非空 |
+| `canRedo()` | `boolean` | 重做堆疊是否非空 |
+| `peek(d)` | `{card, type}` 或 `null` | 預覽方向 d 會到哪張卡片。`type` 為 `'navigate'`、`'undo'` 或 `'redo'`。結果具冪等性：同一狀態下多次呼叫回傳相同結果。 |
+| `peekAll()` | `{dir: {card, type}}` | 預覽所有 8 個方向。結果被快取，直到狀態變動才重算。 |
 
 **undo 的形式化語意**：
 
@@ -301,3 +305,4 @@ undo():
 | 0.3 | 2026-03-25 | 修正機率模型（下降階乘）、定義候選池確定性排序、補充模糊匹配權衡分析 |
 | 0.4 | 2026-03-26 | 新增插件系統架構與內建記憶（undo）插件規格 |
 | 0.5 | 2026-03-30 | 候選池選取改為隨機（移除確定性循環）；起始卡片隨機化（可透過 startIndex 自訂）；seed 預設改為 Date.now() |
+| 0.6 | 2026-03-30 | 新增 peek/peekAll 冪等性保證（快取機制）；新增 redo、canRedo、peek、peekAll 方法文件；UI 中 undo/redo 方向僅顯示箭頭 |

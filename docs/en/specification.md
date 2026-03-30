@@ -1,7 +1,7 @@
 # DCL Algorithm Specification
 
 **Directional Constraint Locking**
-Version 0.5 — 2026-03-30
+Version 0.6 — 2026-03-30
 
 ---
 
@@ -283,7 +283,11 @@ The `installer` function receives the engine instance and may:
 | Method | Return | Description |
 |--------|--------|-------------|
 | `undo()` | `{card, candidates, allMatches, lockMap, lockOrder}` or `null` | Pops the stack, sets `c_t` to the previous card. Lock state L and lock order Q are **not modified**. Candidates are recalculated as P(L, c_t_prev). Returns `null` if stack is empty. |
+| `redo()` | Same as above | Redo the last undone operation. |
 | `canUndo()` | `boolean` | Whether the card stack is non-empty |
+| `canRedo()` | `boolean` | Whether the redo stack is non-empty |
+| `peek(d)` | `{card, type}` or `null` | Preview which card direction d would reach. `type` is `'navigate'`, `'undo'`, or `'redo'`. Idempotent: returns the same result on repeated calls within the same state. |
+| `peekAll()` | `{dir: {card, type}}` | Preview all 8 directions. Results are cached until state changes. |
 
 **Formal semantics of undo**:
 
@@ -309,3 +313,4 @@ Key property: **undo preserves constraints**. The lock set L and lock order Q ar
 | 0.3 | 2026-03-25 | Fixed probability model (falling factorial), defined deterministic pool ordering, added fuzzy matching trade-off analysis |
 | 0.4 | 2026-03-26 | Added plugin system architecture and built-in memory (undo) plugin specification |
 | 0.5 | 2026-03-30 | Changed pool selection from deterministic cycle to random; randomized starting card (configurable via startIndex); seed default changed to Date.now() |
+| 0.6 | 2026-03-30 | Added peek/peekAll idempotency guarantee (caching); documented redo, canRedo, peek, peekAll methods; UI shows only arrows for undo/redo directions |

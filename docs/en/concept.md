@@ -1,7 +1,7 @@
 # Directional Constraint Locking
 ## Concept Document
 
-**Version:** v0.5
+**Version:** v0.6
 **Date:** 2026-03-30
 **Status:** Proof of concept (Prototype complete)
 
@@ -308,3 +308,4 @@ This design reflects a deliberate choice: undo means "go back to the previous ca
 | v0.3 | 2026-03-25 | Added extension directions: ordered dimensions (time/intensity axis), same-direction progressive refinement |
 | v0.4 | 2026-03-26 | Added plugin architecture and built-in memory (undo) plugin |
 | v0.5 | 2026-03-30 | Changed pool selection to random; randomized starting card (configurable via startIndex); seed default changed to Date.now() |
+| v0.6 | 2026-03-30 | peek/peekAll idempotency guarantee; undo/redo directions show only arrows, no category labels |

@@ -128,7 +128,7 @@ engine.canUndo();           // true / false
 
 | Plugin | Methods Added | Description |
 |--------|--------------|-------------|
-| `memory` | `undo()`, `redo()`, `canUndo()`, `canRedo()`, `peek(dir)`, `peekAll()` | Full path backtracking. Moving in the opposite direction auto-undoes. The entire path is retraced step by step — not just the last move. Lock state is fully restored on each undo. |
+| `memory` | `undo()`, `redo()`, `canUndo()`, `canRedo()`, `peek(dir)`, `peekAll()` | Full path backtracking. Moving in the opposite direction auto-undoes. Lock state is fully restored on each undo. `peek`/`peekAll` are idempotent — same state always returns the same preview. |
 
 ### Custom Plugins
 
