@@ -34,8 +34,6 @@ var DCL = (function () {
   var LCG_INC  = 1013904223;
   var SEED_STEP = 31337;
   var UNDO_MAX = 50;
-  var COUNTER_MAX_KEYS = 100;
-
   // --- Seeded shuffle (LCG) ---
   function shuffle(arr, seed) {
     var a = arr.slice();
@@ -132,11 +130,6 @@ var DCL = (function () {
     return result;
   }
 
-  /** Lock-state key for cycle counter */
-  function lockKey(lockMap, lockOrder) {
-    return lockOrder.map(function (d) { return d + '=' + lockMap[d]; }).join(';');
-  }
-
   // --- Shallow object copy ---
   function assign(target, src) {
     for (var k in src) {
@@ -166,8 +159,7 @@ var DCL = (function () {
       return {
         cur: startCard,
         lockMap: {},
-        lockOrder: [],
-        counter: {}
+        lockOrder: []
       };
     }
 
@@ -205,18 +197,9 @@ var DCL = (function () {
       // Update state
       state.lockMap = nMap;
       state.lockOrder = nOrd;
-      // Step 4: cycle
-      var key = lockKey(nMap, nOrd);
-      if (!(key in state.counter)) state.counter[key] = 0;
-      state.cur = candidates[state.counter[key] % candidates.length];
-      state.counter[key] = (state.counter[key] + 1) % candidates.length;
-
-      // Prevent unbounded counter growth
-      if (Object.keys(state.counter).length > COUNTER_MAX_KEYS) {
-        var fresh = {};
-        fresh[key] = state.counter[key];
-        state.counter = fresh;
-      }
+      // Step 4: random selection from candidate pool
+      var pick = Math.floor(Math.random() * candidates.length);
+      state.cur = candidates[pick];
 
       return {
         card: state.cur,
@@ -237,7 +220,6 @@ var DCL = (function () {
         cur: state.cur,
         lockMap: assign({}, state.lockMap),
         lockOrder: state.lockOrder.slice(),
-        counter: assign({}, state.counter)
       };
       // Lazy getter — allMatches is only computed when accessed
       var _allMatches;
@@ -256,7 +238,6 @@ var DCL = (function () {
       state.cur = s.cur;
       state.lockMap = s.lockMap;
       state.lockOrder = s.lockOrder;
-      state.counter = s.counter;
     }
 
     var engineId = nextId++;
@@ -306,8 +287,7 @@ var DCL = (function () {
       priv.setState({
         cur: snap.cur,
         lockMap: assign({}, snap.lockMap),
-        lockOrder: snap.lockOrder.slice(),
-        counter: assign({}, snap.counter)
+        lockOrder: snap.lockOrder.slice()
       });
     }
 
@@ -410,8 +390,7 @@ var DCL = (function () {
     use: use,
     generateCards: generateCards,
     getPool: function (cards, lockMap, excludeId) { return matchCards(cards, lockMap, excludeId); },
-    getAllMatch: function (cards, lockMap) { return matchCards(cards, lockMap); },
-    lockKey: lockKey
+    getAllMatch: function (cards, lockMap) { return matchCards(cards, lockMap); }
   };
 
   return api;
