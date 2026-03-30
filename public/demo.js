@@ -208,25 +208,28 @@
     var btn = document.createElement('button');
     var cls = 'dir-btn' + (dir in lockMap ? ' locked' : '');
 
-    // Peek info (undo/redo hints) when memory plugin is active
-    var peekHint = '';
+    var peekType = null;
     if (memoryEnabled && engine.peek) {
       var p = engine.peek(dir);
-      if (p && p.type === 'undo') {
-        cls += ' peek-undo';
-        peekHint = '<span class="dir-peek">\u21A9 ' + cardLabel(p.card) + '</span>';
-      } else if (p && p.type === 'redo') {
-        cls += ' peek-redo';
-        peekHint = '<span class="dir-peek">\u21AA ' + cardLabel(p.card) + '</span>';
-      }
+      if (p) peekType = p.type;
     }
+
+    if (peekType === 'undo') cls += ' peek-undo';
+    else if (peekType === 'redo') cls += ' peek-redo';
 
     btn.className = cls;
     btn.id = 'db-' + dir;
-    btn.innerHTML =
-      '<span class="dir-arrow">' + ARROWS[dir] + '</span>' +
-      '<span class="dir-val">' + categoryLabel(cur.attrs[dir]) + '</span>' +
-      peekHint;
+
+    if (peekType === 'undo') {
+      btn.innerHTML = '<span class="dir-arrow">\u21A9</span>';
+    } else if (peekType === 'redo') {
+      btn.innerHTML = '<span class="dir-arrow">\u21AA</span>';
+    } else {
+      btn.innerHTML =
+        '<span class="dir-arrow">' + ARROWS[dir] + '</span>' +
+        '<span class="dir-val">' + categoryLabel(cur.attrs[dir]) + '</span>';
+    }
+
     btn.onclick = function () { navigate(dir); };
     return btn;
   }

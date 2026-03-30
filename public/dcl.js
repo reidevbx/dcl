@@ -300,7 +300,8 @@ var DCL = (function () {
     var _navigate = engine.navigate;
     var _reset = engine.reset;
     var _getState = engine.getState;
-    var peekCache = {};  // dir → cardId — ensures peek/navigate consistency
+    var peekCache = {};   // dir → cardId — ensures peek/navigate consistency
+    var peekAllCache = null;  // cached peekAll result, invalidated on state change
 
     function snapshot() { return _getState.call(engine); }
 
@@ -314,14 +315,22 @@ var DCL = (function () {
 
     function resultFromState(flags) {
       var s = _getState.call(engine);
-      return assign({
+      var r = assign({
         card: s.cur,
         candidates: matchCards(engine.cards, s.lockMap, s.cur.id, priv.index),
-        allMatches: matchCards(engine.cards, s.lockMap, undefined, priv.index),
         released: [],
         lockMap: s.lockMap,
         lockOrder: s.lockOrder
       }, flags);
+      var _allM;
+      Object.defineProperty(r, 'allMatches', {
+        enumerable: true,
+        get: function () {
+          if (!_allM) _allM = matchCards(engine.cards, s.lockMap, undefined, priv.index);
+          return _allM;
+        }
+      });
+      return r;
     }
 
     // Check if dir backtracks (opposite of the last direction in the path)
@@ -335,14 +344,19 @@ var DCL = (function () {
       return null;
     }
 
+    function invalidateCache() {
+      peekCache = {};
+      peekAllCache = null;
+    }
+
     engine.navigate = function (dir) {
       var hint = dirHint(dir);
-      if (hint === 'undo') { peekCache = {}; return engine.undo(); }
-      if (hint === 'redo') { peekCache = {}; return engine.redo(); }
+      if (hint === 'undo') { invalidateCache(); return engine.undo(); }
+      if (hint === 'redo') { invalidateCache(); return engine.redo(); }
 
       var snap = snapshot();
       var targetId = peekCache[dir];
-      peekCache = {};
+      invalidateCache();
       var result = _navigate.call(engine, dir, targetId);
       if (result) {
         undoStack.push({ state: snap, dir: dir });
@@ -362,12 +376,13 @@ var DCL = (function () {
       undoStack = [];
       redoStack = [];
       dirStack  = [];
-      peekCache = {};
+      invalidateCache();
       _reset.call(engine);
     };
 
     engine.undo = function () {
       if (!undoStack.length) return null;
+      invalidateCache();
       var entry = undoStack.pop();
       redoStack.push({ state: snapshot(), dir: entry.dir });
       restore(entry.state);
@@ -377,6 +392,7 @@ var DCL = (function () {
 
     engine.redo = function () {
       if (!redoStack.length) return null;
+      invalidateCache();
       var entry = redoStack.pop();
       undoStack.push({ state: snapshot(), dir: entry.dir });
       restore(entry.state);
@@ -388,19 +404,13 @@ var DCL = (function () {
     engine.canRedo = function () { return redoStack.length > 0; };
 
     engine.peek = function (dir) {
-      var hint = dirHint(dir);
-      if (hint === 'undo') return { card: undoStack[undoStack.length - 1].state.cur, type: 'undo' };
-      if (hint === 'redo') return { card: redoStack[redoStack.length - 1].state.cur, type: 'redo' };
-      var snap = snapshot();
-      var result = _navigate.call(engine, dir);
-      restore(snap);
-      if (!result) return null;
-      peekCache[dir] = result.card.id;
-      return { card: result.card, type: 'navigate' };
+      if (peekAllCache) return peekAllCache[dir];
+      return engine.peekAll()[dir];
     };
 
     engine.peekAll = function () {
-      peekCache = {};
+      if (peekAllCache) return peekAllCache;
+
       var out = {};
       var snap = snapshot();
       for (var i = 0; i < DIRS.length; i++) {
@@ -421,6 +431,7 @@ var DCL = (function () {
           }
         }
       }
+      peekAllCache = out;
       return out;
     };
   });
