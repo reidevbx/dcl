@@ -147,13 +147,19 @@ var DCL = (function () {
   function create(opts) {
     opts = opts || {};
     var cardCount = opts.cardCount || 40;
-    var baseSeed = opts.seed || 2025;
+    var baseSeed = opts.seed != null ? opts.seed : Date.now();
     var categories = opts.categories || 8;
     if (cardCount < 2) throw new Error('DCL: cardCount must be >= 2');
     if (categories < 8) throw new Error('DCL: categories must be >= 8');
     var cards = opts.cards || generateCards(cardCount, baseSeed, categories);
     var _index = buildIndex(cards);
-    var state = createState(cards[0]);
+    var startIdx = opts.startIndex;
+    if (startIdx === undefined || startIdx === null) {
+      startIdx = Math.floor(Math.random() * cards.length);
+    } else if (startIdx < 0 || startIdx >= cards.length) {
+      throw new Error('DCL: startIndex out of range (0..' + (cards.length - 1) + ')');
+    }
+    var state = createState(cards[startIdx]);
 
     function createState(startCard) {
       return {
@@ -212,7 +218,8 @@ var DCL = (function () {
     }
 
     function reset() {
-      state = createState(cards[0]);
+      var idx = Math.floor(Math.random() * cards.length);
+      state = createState(cards[idx]);
     }
 
     function getState() {

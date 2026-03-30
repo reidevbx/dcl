@@ -1,7 +1,7 @@
 # DCL Algorithm Specification
 
 **Directional Constraint Locking**
-Version 0.4 — 2026-03-26
+Version 0.5 — 2026-03-30
 
 ---
 
@@ -62,14 +62,13 @@ Given a direction d, navigation proceeds as follows:
        L  ← L \ {(d', ·)}      // remove that constraint
        P  ← P(L, c_t)          // recompute
 
-4. CYCLE — Select the next card from the pool (P ordered by card id):
-     c_t ← P[k mod |P|]
-     k   ← k + 1
+4. RANDOM SELECT — Pick a random card from the pool:
+     c_t ← P[random(0, |P|-1)]
 ```
 
-**Note on already-locked directions**: When d ∈ L (the direction is already locked), step 1 is skipped — no new constraint is added. The function proceeds directly to step 2 with the existing lock set, effectively cycling through the same pool.
+**Note on already-locked directions**: When d ∈ L (the direction is already locked), step 1 is skipped — no new constraint is added. The function proceeds directly to step 2 with the existing lock set, effectively picking randomly from the same pool again.
 
-**Determinism**: The candidate pool P must be sorted by a deterministic key (e.g., card id) before indexing with `k mod |P|`. Without a defined ordering, different implementations may produce different traversal sequences for the same input, making the algorithm non-reproducible.
+**Non-determinism**: Each navigation randomly selects from the candidate pool. The same sequence of operations is not guaranteed to produce the same result. This enhances the sense of exploration and surprise, at the cost of reproducibility. Undo/redo still restores exact state via snapshots.
 
 ---
 
@@ -93,11 +92,9 @@ Given a direction d, navigation proceeds as follows:
 - Since |C| > 1, |P(∅, c_t)| ≥ 1.
 - Therefore, the while loop in step 3 always terminates with P ≠ ∅. ∎
 
-### 3.4 Cyclic Navigation
+### 3.4 Random Navigation
 
-Under a fixed lock set L, the candidate pool P(L, c_t) is finite. Repeated navigation in the same direction cycles through P in order, eventually returning to the first candidate.
-
-The cycle length equals |P(L, c_t)|.
+Under a fixed lock set L, the candidate pool P(L, c_t) is finite. Each navigation randomly selects a card from the pool, without guaranteeing that every candidate will be visited. This non-deterministic design prioritizes exploration surprise over complete coverage.
 
 ### 3.5 Permutation Uniqueness
 
@@ -130,7 +127,7 @@ Fallback: Without an index (e.g., using the public `getPool`/`getAllMatch` API),
 | Inverted index | O(n · \|D\|) = O(8n) = O(n) |
 | Lock state | O(\|D\|) = O(1) |
 | Lock queue | O(\|D\|) = O(1) |
-| Cycle counters | O(number of distinct lock states visited) |
+| (no extra state) | — |
 
 ### 4.3 Further Optimization Opportunities
 
@@ -166,8 +163,7 @@ The `attrs` object maps each of the 8 directions to a unique integer in {1…N} 
 {
   "current": "card_001",
   "lockMap": { "right": 8, "up": 7 },
-  "lockOrder": ["right", "up"],
-  "counter": { "right=8;up=7": 2 }
+  "lockOrder": ["right", "up"]
 }
 ```
 
@@ -176,7 +172,6 @@ The `attrs` object maps each of the 8 directions to a unique integer in {1…N} 
 | `current` | Currently active card |
 | `lockMap` | Locked direction→value pairs |
 | `lockOrder` | FIFO queue of lock sequence |
-| `counter` | Cycle position per unique lock-state key |
 
 ---
 
@@ -313,3 +308,4 @@ Key property: **undo preserves constraints**. The lock set L and lock order Q ar
 | 0.2 | 2026-03-25 | Formal definitions, FIFO unlock confirmed, permutation constraint, prototype completed |
 | 0.3 | 2026-03-25 | Fixed probability model (falling factorial), defined deterministic pool ordering, added fuzzy matching trade-off analysis |
 | 0.4 | 2026-03-26 | Added plugin system architecture and built-in memory (undo) plugin specification |
+| 0.5 | 2026-03-30 | Changed pool selection from deterministic cycle to random; randomized starting card (configurable via startIndex); seed default changed to Date.now() |

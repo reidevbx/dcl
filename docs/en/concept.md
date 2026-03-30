@@ -1,8 +1,8 @@
 # Directional Constraint Locking
 ## Concept Document
 
-**Version:** v0.4
-**Date:** 2026-03-26
+**Version:** v0.5
+**Date:** 2026-03-30
 **Status:** Proof of concept (Prototype complete)
 
 ---
@@ -60,9 +60,8 @@ All cards satisfying every locked constraint, excluding the current card.
      L  ← L \ {(d', ·)}
      P  ← P(L, cₜ)
 
-4. Cycle to next card:
-   cₜ ← P[k mod |P|]
-   k  ← k + 1
+4. Random select next card:
+   cₜ ← P[random(0, |P|-1)]
 ```
 
 ### 2.4 Algorithm Properties
@@ -70,7 +69,7 @@ All cards satisfying every locked constraint, excluding the current card.
 - **Monotonic accumulation**: |L| only increases, unless FIFO unlock fires
 - **Maximum lock count**: |L| ≤ 8 (limited by the number of directions)
 - **Deadlock freedom**: As long as |C| > 1, P(∅, cₜ) ≠ ∅ always holds; FIFO unlock guarantees candidates
-- **Cyclic navigation**: Under fixed L, continuous navigation loops back to the start (finite cyclic group)
+- **Random navigation**: Under fixed L, each navigation randomly selects from the candidate pool, without guaranteeing complete coverage
 - **Selection constraint**: A(c, ·) selects 8 distinct values from {1…N} ⟹ a card cannot have the same value in two directions
 
 ---
@@ -124,13 +123,13 @@ Step 3: Move ↗ → Add lock ↗=(Card B's ↗ value)
 ...and so on, up to 8 simultaneous locks
 ```
 
-### 3.4 Infinite Cycling
+### 3.4 Random Exploration
 
-Cards satisfying the current constraints form a **Loop Pool**.
-Moving continuously in the same direction cycles through this pool endlessly — you never reach a dead end.
+Cards satisfying the current constraints form a **Candidate Pool**.
+Moving continuously in the same direction randomly picks from this pool — you never reach a dead end.
 
 ```
-Cards where →=8: A → C → F → H → A → C → ... (infinite cycle)
+Cards where →=8: {A, C, F, H} → randomly pick one each time
 ```
 
 ### 3.5 FIFO Unlock
@@ -171,7 +170,6 @@ The user's current navigation state, recording locked constraints and their orde
   "current": "photo_001",
   "lockMap": { "right": 8, "up": 7 },
   "lockOrder": ["right", "up"],
-  "counter": { "right=8;up=7": 2 },
   "history": ["photo_003", "photo_007", "photo_001"]
 }
 ```
@@ -309,3 +307,4 @@ This design reflects a deliberate choice: undo means "go back to the previous ca
 | v0.2 | 2026-03-25 | Added formal definitions, confirmed FIFO unlock, permutation constraint, prototype complete |
 | v0.3 | 2026-03-25 | Added extension directions: ordered dimensions (time/intensity axis), same-direction progressive refinement |
 | v0.4 | 2026-03-26 | Added plugin architecture and built-in memory (undo) plugin |
+| v0.5 | 2026-03-30 | Changed pool selection to random; randomized starting card (configurable via startIndex); seed default changed to Date.now() |

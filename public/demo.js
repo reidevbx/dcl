@@ -76,7 +76,7 @@
   }
 
   // --- Initialize engine ---
-  var engine = DCL.create({ cardCount: 100, categories: 20, seed: 2025 });
+  var engine = DCL.create({ cardCount: 100, categories: 20 });
 
   // --- Toast ---
   var toastTimer = null;
