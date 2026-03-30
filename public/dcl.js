@@ -175,7 +175,7 @@ var DCL = (function () {
      * Returns an object describing what happened:
      *   { card, candidates, allMatches, released, lockMap, lockOrder }
      */
-    function navigate(dir) {
+    function navigate(dir, targetId) {
       var cur = state.cur;
       var nMap = assign({}, state.lockMap);
       var nOrd = state.lockOrder.slice();
@@ -203,18 +203,31 @@ var DCL = (function () {
       // Update state
       state.lockMap = nMap;
       state.lockOrder = nOrd;
-      // Step 4: random selection from candidate pool
-      var pick = Math.floor(Math.random() * candidates.length);
-      state.cur = candidates[pick];
+      // Step 4: select from candidate pool
+      var picked = null;
+      if (targetId !== undefined) {
+        for (var i = 0; i < candidates.length; i++) {
+          if (candidates[i].id === targetId) { picked = candidates[i]; break; }
+        }
+      }
+      state.cur = picked || candidates[Math.floor(Math.random() * candidates.length)];
 
-      return {
+      var navResult = {
         card: state.cur,
         candidates: candidates,
-        allMatches: matchCards(cards, nMap, undefined, _index),
         released: released,
         lockMap: assign({}, nMap),
         lockOrder: nOrd.slice()
       };
+      var _navAllMatches;
+      Object.defineProperty(navResult, 'allMatches', {
+        enumerable: true,
+        get: function () {
+          if (!_navAllMatches) _navAllMatches = matchCards(cards, nMap, undefined, _index);
+          return _navAllMatches;
+        }
+      });
+      return navResult;
     }
 
     function reset() {
@@ -287,6 +300,7 @@ var DCL = (function () {
     var _navigate = engine.navigate;
     var _reset = engine.reset;
     var _getState = engine.getState;
+    var peekCache = {};  // dir → cardId — ensures peek/navigate consistency
 
     function snapshot() { return _getState.call(engine); }
 
@@ -323,11 +337,13 @@ var DCL = (function () {
 
     engine.navigate = function (dir) {
       var hint = dirHint(dir);
-      if (hint === 'undo') return engine.undo();
-      if (hint === 'redo') return engine.redo();
+      if (hint === 'undo') { peekCache = {}; return engine.undo(); }
+      if (hint === 'redo') { peekCache = {}; return engine.redo(); }
 
       var snap = snapshot();
-      var result = _navigate.call(engine, dir);
+      var targetId = peekCache[dir];
+      peekCache = {};
+      var result = _navigate.call(engine, dir, targetId);
       if (result) {
         undoStack.push({ state: snap, dir: dir });
         if (undoStack.length > maxSize) {
@@ -346,6 +362,7 @@ var DCL = (function () {
       undoStack = [];
       redoStack = [];
       dirStack  = [];
+      peekCache = {};
       _reset.call(engine);
     };
 
@@ -377,13 +394,32 @@ var DCL = (function () {
       var snap = snapshot();
       var result = _navigate.call(engine, dir);
       restore(snap);
-      return result ? { card: result.card, type: 'navigate' } : null;
+      if (!result) return null;
+      peekCache[dir] = result.card.id;
+      return { card: result.card, type: 'navigate' };
     };
 
     engine.peekAll = function () {
+      peekCache = {};
       var out = {};
+      var snap = snapshot();
       for (var i = 0; i < DIRS.length; i++) {
-        out[DIRS[i]] = engine.peek(DIRS[i]);
+        var dir = DIRS[i];
+        var hint = dirHint(dir);
+        if (hint === 'undo') {
+          out[dir] = { card: undoStack[undoStack.length - 1].state.cur, type: 'undo' };
+        } else if (hint === 'redo') {
+          out[dir] = { card: redoStack[redoStack.length - 1].state.cur, type: 'redo' };
+        } else {
+          var result = _navigate.call(engine, dir);
+          restore(snap);
+          if (result) {
+            peekCache[dir] = result.card.id;
+            out[dir] = { card: result.card, type: 'navigate' };
+          } else {
+            out[dir] = null;
+          }
+        }
       }
       return out;
     };
