@@ -17,7 +17,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/reidevbx/dcl"
+    "url": "git+https://github.com/reidevbx/dcl.git"
   },
   "homepage": "https://reidevbx.github.io/dcl",
   "author": "reichill"
