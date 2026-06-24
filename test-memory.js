@@ -17,9 +17,10 @@ function assert(cond, msg) {
 // ============================================================
 console.log('\n=== Test 1: Core algorithm integrity (no plugin) ===');
 (function () {
-  var e = DCL.create({ cardCount: 40, seed: 2025 });
+  // startIndex pins the deterministic start; selection is still random by design.
+  var e = DCL.create({ cardCount: 40, seed: 2025, startIndex: 0 });
   var s0 = e.getState();
-  assert(s0.cur.id === 0, 'starts at card 0');
+  assert(s0.cur.id === 0, 'starts at card 0 (startIndex pinned)');
   assert(Object.keys(s0.lockMap).length === 0, 'no initial locks');
 
   // Navigate right → locks right dimension
@@ -35,15 +36,19 @@ console.log('\n=== Test 1: Core algorithm integrity (no plugin) ===');
   assert(r2.lockOrder.length >= 1, 'at least one lock after second move');
   assert('up' in r2.lockMap, 'up is locked');
 
-  // Cycle: navigate right again in same state
-  var r3 = e.navigate('right');
-  assert(r3 !== null, 'navigate right again succeeds');
-  assert(r3.lockOrder.length === 2, 'still two locks (right already locked)');
+  // Re-navigating an already-locked direction must NOT add a new lock.
+  // (It may shrink lockOrder if FIFO unlock fires, but can never grow it.)
+  var before = r2.lockOrder.length;
+  var lockedDir = r2.lockOrder[r2.lockOrder.length - 1];
+  var r3 = e.navigate(lockedDir);
+  assert(r3 !== null, 'navigate already-locked dir succeeds');
+  assert(lockedDir in r2.lockMap, 'precondition: re-navigated dir was already locked');
+  assert(r3.lockOrder.length <= before, 'already-locked dir adds no new lock');
 
-  // Reset
+  // Reset: clears locks and selects a (random) valid start card.
   e.reset();
   var sr = e.getState();
-  assert(sr.cur.id === 0, 'reset returns to card 0');
+  assert(sr.cur.id >= 0 && sr.cur.id < 40, 'reset selects a valid start card');
   assert(Object.keys(sr.lockMap).length === 0, 'reset clears locks');
 })();
 
@@ -99,7 +104,6 @@ console.log('\n=== Test 4: Opposite direction auto-undo ===');
 
   var cardA = e.getState().cur;
   e.navigate('right');    // A → B
-  var cardB = e.getState().cur;
 
   // Navigate left (opposite of right) → should auto-undo back to A
   var r = e.navigate('left');
@@ -120,7 +124,6 @@ console.log('\n=== Test 5: Redo mechanism ===');
   var e = DCL.create({ cardCount: 40, seed: 2025 });
   DCL.use(e, 'memory');
 
-  var cardA = e.getState().cur;
   var r1 = e.navigate('right');   // A → B
   var cardB = r1.card;
   var lockAfterB = e.getState().lockMap;
@@ -266,7 +269,7 @@ console.log('\n=== Test 11: Card objects are frozen ===');
 // ============================================================
 console.log('\n=== Test 12: _setState not on public API ===');
 (function () {
-  var e = DCL.create({ cardCount: 10, seed: 99 });
+  var e = DCL.create({ cardCount: 10, seed: 99, startIndex: 0 });
   assert(typeof e._setState === 'undefined', '_setState is not exposed on engine');
   // Plugin should still work via internal channel
   DCL.use(e, 'memory');
