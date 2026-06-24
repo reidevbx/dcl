@@ -42,6 +42,35 @@
 
 Demo 提供 [英文](https://reidevbx.github.io/dcl) 和 [繁體中文](https://reidevbx.github.io/dcl/zh/) 版本。
 
+## 安裝使用
+
+```bash
+npm install @reichill/dcl
+```
+
+`dcl.js` 是零依賴的 UMD 模組 — 可透過 CommonJS、ESM 或瀏覽器 `<script>` 全域變數使用。
+
+```js
+const DCL = require('@reichill/dcl');
+
+const engine = DCL.create({ cardCount: 100, categories: 20 });
+DCL.use(engine, 'memory');            // 可選：啟用 undo/redo
+
+const result = engine.navigate('right');
+console.log(result.card, result.allMatches.length);
+```
+
+```js
+// ESM
+import DCL from '@reichill/dcl';
+```
+
+```html
+<!-- 瀏覽器全域 -->
+<script src="https://unpkg.com/@reichill/dcl"></script>
+<script>const engine = DCL.create({ cardCount: 100 });</script>
+```
+
 ## 文件
 
 | 文件 | 說明 |

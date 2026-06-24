@@ -44,6 +44,35 @@ Try the interactive demo: **[reidevbx.github.io/dcl](https://reidevbx.github.io/
 
 Available in [English](https://reidevbx.github.io/dcl) and [繁體中文](https://reidevbx.github.io/dcl/zh/).
 
+## Install
+
+```bash
+npm install @reichill/dcl
+```
+
+`dcl.js` is a zero-dependency UMD module — usable via CommonJS, ESM, or a browser `<script>` global.
+
+```js
+const DCL = require('@reichill/dcl');
+
+const engine = DCL.create({ cardCount: 100, categories: 20 });
+DCL.use(engine, 'memory');            // opt-in undo/redo (optional)
+
+const result = engine.navigate('right');
+console.log(result.card, result.allMatches.length);
+```
+
+```js
+// ESM
+import DCL from '@reichill/dcl';
+```
+
+```html
+<!-- Browser global -->
+<script src="https://unpkg.com/@reichill/dcl"></script>
+<script>const engine = DCL.create({ cardCount: 100 });</script>
+```
+
 ## Documentation
 
 | Document | EN | 中文 |
