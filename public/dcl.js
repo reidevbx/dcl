@@ -38,8 +38,10 @@ var DCL = (function () {
   function shuffle(arr, seed) {
     var a = arr.slice();
     for (var i = a.length - 1; i > 0; i--) {
-      seed = (seed * LCG_MULT + LCG_INC) & 0xffffffff;
-      var j = Math.floor(((seed >>> 0) / 0x100000000) * (i + 1));
+      // 32-bit integer LCG path (Math.imul) avoids float precision loss when
+      // the incoming seed is large (e.g. Date.now()-based default seeds).
+      seed = (Math.imul(seed >>> 0, LCG_MULT) + LCG_INC) >>> 0;
+      var j = Math.floor((seed / 0x100000000) * (i + 1));
       var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
     }
     return a;
@@ -89,7 +91,8 @@ var DCL = (function () {
   /** Match cards using inverted index intersection (fast path) or linear scan (fallback) */
   function matchCards(cards, lockMap, excludeId, index) {
     var keys = Object.keys(lockMap);
-    if (!keys.length && excludeId === undefined) return cards;
+    // Return a copy so callers can't mutate the cards array we hold internally.
+    if (!keys.length && excludeId === undefined) return cards.slice();
 
     var result;
     if (index && keys.length > 0) {
@@ -102,7 +105,8 @@ var DCL = (function () {
       }
       var base = (index[smallest] && index[smallest][lockMap[smallest]]) || [];
       if (keys.length === 1) {
-        result = base;
+        // Copy: base is a live index bucket; callers must not mutate it.
+        result = base.slice();
       } else {
         result = [];
         for (var i = 0; i < base.length; i++) {
@@ -142,6 +146,40 @@ var DCL = (function () {
   var internals = {};
   var nextId = 1;
 
+  // --- Validate externally-supplied cards (opts.cards) ---
+  // Guarantees the invariants the algorithm relies on: |C| >= 2 (deadlock-free),
+  // unique ids (excludeId correctness), and 8 distinct numeric values per card.
+  function validateCards(cards) {
+    if (!Array.isArray(cards) || cards.length < 2) {
+      throw new Error('DCL: opts.cards must be an array with length >= 2');
+    }
+    var ids = {};
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (!c || typeof c.attrs !== 'object' || c.attrs === null) {
+        throw new Error('DCL: opts.cards[' + i + '] is missing an attrs object');
+      }
+      if (c.id === undefined || c.id === null) {
+        throw new Error('DCL: opts.cards[' + i + '] is missing an id');
+      }
+      if (ids.hasOwnProperty(c.id)) {
+        throw new Error('DCL: duplicate card id "' + c.id + '" (ids must be unique)');
+      }
+      ids[c.id] = true;
+      var seen = {};
+      for (var d = 0; d < DIRS.length; d++) {
+        var v = c.attrs[DIRS[d]];
+        if (typeof v !== 'number' || !isFinite(v)) {
+          throw new Error('DCL: opts.cards[' + i + '] has non-numeric value for direction "' + DIRS[d] + '"');
+        }
+        if (seen.hasOwnProperty(v)) {
+          throw new Error('DCL: opts.cards[' + i + '] has duplicate value ' + v + ' (the 8 directional values must be distinct)');
+        }
+        seen[v] = true;
+      }
+    }
+  }
+
   // --- Engine factory ---
 
   function create(opts) {
@@ -151,7 +189,13 @@ var DCL = (function () {
     var categories = opts.categories || 8;
     if (cardCount < 2) throw new Error('DCL: cardCount must be >= 2');
     if (categories < 8) throw new Error('DCL: categories must be >= 8');
-    var cards = opts.cards || generateCards(cardCount, baseSeed, categories);
+    var cards;
+    if (opts.cards) {
+      validateCards(opts.cards);
+      cards = opts.cards;
+    } else {
+      cards = generateCards(cardCount, baseSeed, categories);
+    }
     var _index = buildIndex(cards);
     var startIdx = opts.startIndex;
     if (startIdx === undefined || startIdx === null) {
@@ -246,7 +290,9 @@ var DCL = (function () {
       Object.defineProperty(s, 'allMatches', {
         enumerable: true,
         get: function () {
-          if (!_allMatches) _allMatches = matchCards(cards, state.lockMap, undefined, _index);
+          // Use the snapshot's lockMap, not live state — otherwise a later
+          // navigate() would make s.allMatches inconsistent with s.lockMap.
+          if (!_allMatches) _allMatches = matchCards(cards, s.lockMap, undefined, _index);
           return _allMatches;
         }
       });
@@ -282,7 +328,15 @@ var DCL = (function () {
 
   function use(engine, name) {
     if (!plugins[name]) throw new Error('DCL: unknown plugin "' + name + '"');
-    plugins[name](engine, internals[engine._id] || {});
+    var priv = internals[engine._id];
+    if (priv) {
+      // Idempotent install: re-using the same plugin would otherwise wrap
+      // navigate/reset/getState again, stacking layers that are hard to reason about.
+      if (!priv.installed) priv.installed = {};
+      if (priv.installed[name]) return engine;
+      priv.installed[name] = true;
+    }
+    plugins[name](engine, priv || {});
     return engine;
   }
 
@@ -338,7 +392,12 @@ var DCL = (function () {
       if (dirStack.length && dir === OPPOSITE[dirStack[dirStack.length - 1]]) {
         return 'undo';
       }
-      if (!dirStack.length && redoStack.length && redoStack[redoStack.length - 1].dir === dir) {
+      // Repeating the just-undone direction is a redo — at ANY depth, not only
+      // when the whole path is unwound. (redoStack is cleared on every fresh
+      // navigate, so it is only non-empty right after undo(s). The redo dir can
+      // never equal OPPOSITE[dirStack top] — that move would have been an undo,
+      // not a forward step — so this never conflicts with the undo branch above.)
+      if (redoStack.length && redoStack[redoStack.length - 1].dir === dir) {
         return 'redo';
       }
       return null;
@@ -403,14 +462,10 @@ var DCL = (function () {
     engine.canUndo = function () { return undoStack.length > 0; };
     engine.canRedo = function () { return redoStack.length > 0; };
 
-    engine.peek = function (dir) {
-      if (peekAllCache) return peekAllCache[dir];
-      return engine.peekAll()[dir];
-    };
+    // Return an isolated copy of a peek entry so callers can't pollute the cache.
+    function cloneEntry(e) { return e ? { card: e.card, type: e.type } : e; }
 
-    engine.peekAll = function () {
-      if (peekAllCache) return peekAllCache;
-
+    function buildPeekAll() {
       var out = {};
       var snap = snapshot();
       for (var i = 0; i < DIRS.length; i++) {
@@ -432,7 +487,19 @@ var DCL = (function () {
         }
       }
       peekAllCache = out;
-      return out;
+    }
+
+    engine.peek = function (dir) {
+      if (!peekAllCache) buildPeekAll();
+      return cloneEntry(peekAllCache[dir]);
+    };
+
+    engine.peekAll = function () {
+      if (!peekAllCache) buildPeekAll();
+      // Hand back a fresh map of copied entries; the internal cache stays private.
+      var copy = {};
+      for (var i = 0; i < DIRS.length; i++) copy[DIRS[i]] = cloneEntry(peekAllCache[DIRS[i]]);
+      return copy;
     };
   });
 
