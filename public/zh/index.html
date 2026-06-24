@@ -26,7 +26,7 @@
       <a class="lang-switch" href="../">EN</a>
     </div>
     <h1>方向即篩選<br><span>移動即鎖定</span></h1>
-    <p class="tagline">一種以空間移動行為驅動的多維篩選演算法。每張卡片在 8 個方向各持有一個從 {1…N} 中選出的相異數值（N 可設定，預設為 8）。你往哪個方向移動，就鎖定那個維度的值。</p>
+    <p class="tagline">一種以空間移動行為驅動的多維篩選演算法。每張卡片在 8 個方向各持有一個從 {1…N} 中選出的相異數值（本 demo N = 20，顯示為 A–T）。你往哪個方向移動，就鎖定那個維度的值。</p>
     <div class="rules-grid">
       <div class="rule">
         <div class="rule-num">規則 01</div>
@@ -34,7 +34,7 @@
       </div>
       <div class="rule">
         <div class="rule-num">規則 02</div>
-        <div class="rule-text">符合條件的卡片形成一個<strong>循環池</strong>，在同一方向持續移動就在池中循環。</div>
+        <div class="rule-text">符合條件的卡片形成一個<strong>候選池</strong>，持續移動就從池中隨機選取。</div>
       </div>
       <div class="rule">
         <div class="rule-num">規則 03</div>
@@ -63,7 +63,7 @@
     <div id="navigator"></div>
 
     <div id="pool-display">
-      <div class="pool-title">循環池（Loop Pool）</div>
+      <div class="pool-title">候選池（Candidate Pool）</div>
       <div class="pool-cards" id="pool-cards">
         <span class="pool-empty">尚未鎖定任何條件</span>
       </div>
@@ -86,7 +86,7 @@
   <footer id="footer">
     <span class="footer-text">DCL 演算法</span>
     <a class="footer-link" href="https://github.com/reidevbx/dcl" target="_blank" rel="noopener">GitHub</a>
-    <span class="footer-text" style="color:var(--border2)">100 張卡片 · 8 個方向 · A–H 分類</span>
+    <span class="footer-text" style="color:var(--border2)">100 張卡片 · 8 個方向 · A–T 分類</span>
   </footer>
 
   <script src="../dcl.js"></script>
