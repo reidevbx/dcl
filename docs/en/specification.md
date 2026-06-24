@@ -1,7 +1,7 @@
 # DCL Algorithm Specification
 
 **Directional Constraint Locking**
-Version 0.6 — 2026-03-30
+Version 0.7 — 2026-06-24
 
 ---
 
@@ -267,40 +267,53 @@ The `installer` function receives the engine instance and may:
 
 ### 8.2 Built-in Plugin: `memory`
 
-**Purpose**: Navigation undo — revert to the previous card without altering lock state.
+**Purpose**: Full-state undo/redo — step backward and forward along the navigation history, restoring the exact prior state (current card **and** locks) at each step.
 
-**State**: An internal card stack (max depth: 50).
+**State**: Three internal stacks (undo depth capped at 50):
+
+| Stack | Entry | Role |
+|-------|-------|------|
+| `undoStack` | `{ state, dir }` | Full state snapshots `{cur, lockMap, lockOrder}` of each prior step |
+| `redoStack` | `{ state, dir }` | Snapshots popped by `undo()`, replayable by `redo()` |
+| `dirStack` | `dir` | Path of directions taken, used to detect backtracking |
+
+Because each entry stores a complete snapshot (not just a card), undo/redo restore the **entire** navigation state, including the lock set L and lock order Q. This is a deliberate change from the original card-only design.
 
 **Modified methods**:
 
 | Method | Behavior |
 |--------|----------|
-| `navigate(d)` | Before calling the original, pushes `c_t` onto the card stack |
-| `reset()` | Clears the card stack, then calls the original |
+| `navigate(d)` | Computes a *direction hint* first (see below). If the hint is `undo`/`redo`, delegates to those methods. Otherwise pushes a full snapshot of the current state onto `undoStack`, clears `redoStack`, and navigates — reusing the `peek`-cached target id so a preceding `peek(d)`/`peekAll()` and the actual move land on the **same** card. |
+| `reset()` | Clears all three stacks and the peek caches, then calls the original. |
+
+**Direction hint** (`dirHint(d)`): translates a directional input into undo/redo so spatial backtracking feels natural.
+
+- If `d` is the **opposite** of the last direction taken (`OPPOSITE[dirStack.top]`), the hint is `undo`.
+- Otherwise, if `d` equals the direction of the most recently undone step (`redoStack.top.dir`), the hint is `redo`. This fires at **any** depth, not only when the path is fully unwound. (`redoStack` is cleared on every fresh `navigate`, so it is only non-empty right after one or more `undo`s; and the redo direction can never equal `OPPOSITE[dirStack.top]`, so it never collides with the undo case.)
+- Otherwise `null` — a normal forward navigation.
 
 **Added methods**:
 
 | Method | Return | Description |
 |--------|--------|-------------|
-| `undo()` | `{card, candidates, allMatches, lockMap, lockOrder}` or `null` | Pops the stack, sets `c_t` to the previous card. Lock state L and lock order Q are **not modified**. Candidates are recalculated as P(L, c_t_prev). Returns `null` if stack is empty. |
-| `redo()` | Same as above | Redo the last undone operation. |
-| `canUndo()` | `boolean` | Whether the card stack is non-empty |
-| `canRedo()` | `boolean` | Whether the redo stack is non-empty |
-| `peek(d)` | `{card, type}` or `null` | Preview which card direction d would reach. `type` is `'navigate'`, `'undo'`, or `'redo'`. Idempotent: returns the same result on repeated calls within the same state. |
-| `peekAll()` | `{dir: {card, type}}` | Preview all 8 directions. Results are cached until state changes. |
+| `undo()` | `{card, candidates, allMatches, lockMap, lockOrder, undone:true}` or `null` | Pops `undoStack`, pushes the current state onto `redoStack`, and **restores the full snapshot** (`cur`, `lockMap`, `lockOrder`). Returns `null` if `undoStack` is empty. |
+| `redo()` | `{... redone:true}` or `null` | Pops `redoStack`, pushes the current state onto `undoStack`, and restores that snapshot. Returns `null` if `redoStack` is empty. |
+| `canUndo()` | `boolean` | Whether `undoStack` is non-empty |
+| `canRedo()` | `boolean` | Whether `redoStack` is non-empty |
+| `peek(d)` | `{card, type}` or `null` | Preview which card direction d would reach. `type` is `'navigate'`, `'undo'`, or `'redo'`. Idempotent: returns the same result on repeated calls within the same state, and the cached navigate target is reused by `navigate(d)`. |
+| `peekAll()` | `{dir: {card, type}}` | Preview all 8 directions. Results are cached until the next state-changing call. |
 
 **Formal semantics of undo**:
 
 ```
 undo():
-  if stack = ∅: return null
-  c_prev ← stack.pop()
-  c_t ← c_prev
-  P ← P(L, c_t)         // L is unchanged
-  return (c_t, P, L, Q)
+  if undoStack = ∅: return null
+  redoStack.push({ state: snapshot(c_t, L, Q), dir })
+  (c_t, L, Q) ← undoStack.pop().state    // full state restored
+  return (c_t, P(L, c_t), L, Q, undone=true)
 ```
 
-Key property: **undo preserves constraints**. The lock set L and lock order Q are invariant across undo operations. Only the current card c_t changes.
+Key property: **undo/redo restore exact prior state**. Each step reinstates the snapshot's current card *and* its lock set L and lock order Q. Reproducibility across the non-deterministic random selection is achieved entirely through these snapshots.
 
 ---
 
@@ -314,3 +327,4 @@ Key property: **undo preserves constraints**. The lock set L and lock order Q ar
 | 0.4 | 2026-03-26 | Added plugin system architecture and built-in memory (undo) plugin specification |
 | 0.5 | 2026-03-30 | Changed pool selection from deterministic cycle to random; randomized starting card (configurable via startIndex); seed default changed to Date.now() |
 | 0.6 | 2026-03-30 | Added peek/peekAll idempotency guarantee (caching); documented redo, canRedo, peek, peekAll methods; UI shows only arrows for undo/redo directions |
+| 0.7 | 2026-06-24 | Corrected §8.2 to match implementation: `memory` undo/redo restore **full state snapshots** (current card + locks), not card-only; documented the opposite-direction→undo and repeat-direction→redo hints (redo now fires at any depth); noted peek→navigate target consistency |

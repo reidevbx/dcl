@@ -1,7 +1,7 @@
 # DCL 演算法規格書
 
 **方向約束鎖定（Directional Constraint Locking）**
-版本 0.6 — 2026-03-30
+版本 0.7 — 2026-06-24
 
 ---
 
@@ -259,40 +259,53 @@ DCL.use(engine, name)           // 將插件掛載到特定引擎實例
 
 ### 8.2 內建插件：`memory`
 
-**用途**：導航回退 — 回到前一張卡片，不改變鎖定狀態。
+**用途**：完整狀態的 undo/redo — 沿導航歷史前後移動，每一步都還原**完整的先前狀態**（當前卡片**與**鎖定）。
 
-**狀態**：內部卡片堆疊（最大深度：50）。
+**狀態**：三個內部堆疊（undo 深度上限 50）：
+
+| 堆疊 | 元素 | 角色 |
+|------|------|------|
+| `undoStack` | `{ state, dir }` | 每一步先前狀態的完整快照 `{cur, lockMap, lockOrder}` |
+| `redoStack` | `{ state, dir }` | 被 `undo()` 彈出的快照，可由 `redo()` 重放 |
+| `dirStack` | `dir` | 已走過的方向路徑，用於偵測回退 |
+
+由於每筆元素儲存的是完整快照（而非僅卡片），undo/redo 會還原**整個**導航狀態，包含鎖定集 L 與鎖定順序 Q。這是相對於原本「僅卡片」設計的刻意變更。
 
 **修改的方法**：
 
 | 方法 | 行為 |
 |------|------|
-| `navigate(d)` | 呼叫原始方法前，將 c_t 推入卡片堆疊 |
-| `reset()` | 清空卡片堆疊，再呼叫原始方法 |
+| `navigate(d)` | 先計算*方向提示*（見下）。若提示為 `undo`/`redo`，轉交對應方法。否則將當前狀態的完整快照推入 `undoStack`、清空 `redoStack`，再導航 — 並重用 `peek` 快取的目標 id，使先前的 `peek(d)`/`peekAll()` 與實際移動落在**同一張**卡片。 |
+| `reset()` | 清空三個堆疊與 peek 快取，再呼叫原始方法。 |
+
+**方向提示**（`dirHint(d)`）：將方向輸入轉譯為 undo/redo，讓空間回退更自然。
+
+- 若 `d` 是上一步方向的**相反**（`OPPOSITE[dirStack.top]`），提示為 `undo`。
+- 否則，若 `d` 等於最近一次被撤銷步驟的方向（`redoStack.top.dir`），提示為 `redo`。此判定在**任意**深度皆成立，不限於路徑完全展開時。（`redoStack` 在每次全新 `navigate` 都會清空，故只有在一次或多次 `undo` 之後才非空；且 redo 方向永遠不會等於 `OPPOSITE[dirStack.top]`，因此不會與 undo 情形衝突。）
+- 否則為 `null` — 一般的前向導航。
 
 **新增的方法**：
 
 | 方法 | 回傳 | 說明 |
 |------|------|------|
-| `undo()` | `{card, candidates, allMatches, lockMap, lockOrder}` 或 `null` | 從堆疊彈出，將 c_t 設為前一張卡片。鎖定狀態 L 與鎖定順序 Q **不會被修改**。候選集根據 P(L, c_t_prev) 重新計算。堆疊為空時回傳 `null`。 |
-| `redo()` | 同上 | 重做上一次被撤銷的操作。 |
-| `canUndo()` | `boolean` | 卡片堆疊是否非空 |
-| `canRedo()` | `boolean` | 重做堆疊是否非空 |
-| `peek(d)` | `{card, type}` 或 `null` | 預覽方向 d 會到哪張卡片。`type` 為 `'navigate'`、`'undo'` 或 `'redo'`。結果具冪等性：同一狀態下多次呼叫回傳相同結果。 |
-| `peekAll()` | `{dir: {card, type}}` | 預覽所有 8 個方向。結果被快取，直到狀態變動才重算。 |
+| `undo()` | `{card, candidates, allMatches, lockMap, lockOrder, undone:true}` 或 `null` | 彈出 `undoStack`，將當前狀態推入 `redoStack`，並**還原完整快照**（`cur`、`lockMap`、`lockOrder`）。`undoStack` 為空時回傳 `null`。 |
+| `redo()` | `{... redone:true}` 或 `null` | 彈出 `redoStack`，將當前狀態推入 `undoStack`，並還原該快照。`redoStack` 為空時回傳 `null`。 |
+| `canUndo()` | `boolean` | `undoStack` 是否非空 |
+| `canRedo()` | `boolean` | `redoStack` 是否非空 |
+| `peek(d)` | `{card, type}` 或 `null` | 預覽方向 d 會到哪張卡片。`type` 為 `'navigate'`、`'undo'` 或 `'redo'`。結果具冪等性：同一狀態下多次呼叫回傳相同結果，且快取的 navigate 目標會被 `navigate(d)` 重用。 |
+| `peekAll()` | `{dir: {card, type}}` | 預覽所有 8 個方向。結果被快取，直到下一次改變狀態的呼叫才重算。 |
 
 **undo 的形式化語意**：
 
 ```
 undo():
-  若 stack = ∅: 回傳 null
-  c_prev ← stack.pop()
-  c_t ← c_prev
-  P ← P(L, c_t)         // L 不變
-  回傳 (c_t, P, L, Q)
+  若 undoStack = ∅: 回傳 null
+  redoStack.push({ state: snapshot(c_t, L, Q), dir })
+  (c_t, L, Q) ← undoStack.pop().state    // 還原完整狀態
+  回傳 (c_t, P(L, c_t), L, Q, undone=true)
 ```
 
-關鍵性質：**undo 保留約束條件**。鎖定集 L 與鎖定順序 Q 在 undo 操作中保持不變。只有當前卡片 c_t 改變。
+關鍵性質：**undo/redo 還原精確的先前狀態**。每一步都重建快照的當前卡片*與*其鎖定集 L 與鎖定順序 Q。在非確定性隨機選取下的可重現性，完全由這些快照保證。
 
 ---
 
@@ -306,3 +319,4 @@ undo():
 | 0.4 | 2026-03-26 | 新增插件系統架構與內建記憶（undo）插件規格 |
 | 0.5 | 2026-03-30 | 候選池選取改為隨機（移除確定性循環）；起始卡片隨機化（可透過 startIndex 自訂）；seed 預設改為 Date.now() |
 | 0.6 | 2026-03-30 | 新增 peek/peekAll 冪等性保證（快取機制）；新增 redo、canRedo、peek、peekAll 方法文件；UI 中 undo/redo 方向僅顯示箭頭 |
+| 0.7 | 2026-06-24 | 修正 §8.2 以符合實作：`memory` 的 undo/redo 還原**完整狀態快照**（當前卡片＋鎖定），而非僅卡片；補充「相反方向→undo」與「重複方向→redo」提示（redo 現可在任意深度觸發）；說明 peek→navigate 目標一致性 |
